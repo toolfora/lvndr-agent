@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: CLI parses
+        run: node --check cli/lvndr.mjs
+
+      - name: CLI runs
+        run: |
+          test "$(node cli/lvndr.mjs --version)" = "$(node -p 'require("./cli/package.json").version')"
+          node cli/lvndr.mjs --help > /dev/null
+
+      - name: JSON manifests are valid and agree
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, existsSync } from "node:fs";
+          const files = [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", ".cursor-plugin/plugin.json",
+            ".cursor-plugin/mcp.json", ".codex-plugin/plugin.json", ".mcp.json", "server.json", "cli/package.json"];
+          const j = Object.fromEntries(files.map((f) => [f, JSON.parse(readFileSync(f, "utf8"))]));
+          const fail = (m) => { console.error(m); process.exit(1); };
+          const versions = new Set([".claude-plugin/plugin.json", ".cursor-plugin/plugin.json", ".codex-plugin/plugin.json", "server.json", "cli/package.json"].map((f) => j[f].version));
+          if (versions.size !== 1) fail(`versions differ: ${[...versions]}`);
+          const url = "https://app-production-559c.up.railway.app/mcp";
+          if (j[".mcp.json"].mcpServers.lvndr.url !== url) fail(".mcp.json url");
+          if (j[".cursor-plugin/mcp.json"].mcpServers.lvndr.url !== url) fail("cursor mcp url");
+          if (j["server.json"].remotes[0].url !== url) fail("server.json url");
+          if (!/^io\.github\.[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(j["server.json"].name)) fail("server.json name");
+          for (const p of [j[".claude-plugin/plugin.json"].icon, j[".cursor-plugin/plugin.json"].logo, j[".cursor-plugin/plugin.json"].rules,
+            j[".cursor-plugin/plugin.json"].mcpServers, "skills/lvndr/SKILL.md", "skills/lvndr/references/api.md", "skills/lvndr/references/mcp-tools.md"])
+            if (!existsSync(p)) fail(`missing ${p}`);
+          if (JSON.stringify(j).match(/lv_[A-Za-z0-9]{8,}/)) fail("a key-shaped string is committed");
+          console.log("manifests ok");
+          JS

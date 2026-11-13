@@ -1,0 +1,36 @@
+{
+  "name": "lvndr",
+  "description": "Store time machine for Shopify: every change to a store, who made it, and a precise undo. MCP tools, the safe-change skill and a rule.",
+  "version": "0.1.0",
+  "author": {
+    "name": "HereNow Labs"
+  },
+  "homepage": "https://app-production-559c.up.railway.app/developers",
+  "repository": "https://github.com/kasazen/lvndr-agent",
+  "license": "MIT",
+  "keywords": [
+    "shopify",
+    "undo",
+    "restore",
+    "change-log",
+    "audit",
+    "mcp"
+  ],
+  "logo": "assets/icon-512.png",
+  "skills": "./skills/",
+  "rules": "./rules/lvndr.mdc",
+  "mcpServers": "./.cursor-plugin/mcp.json",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "LVNDR_API_KEY": {
+        "type": "string",
+        "title": "lvndr API key",
+        "description": "Key from lvndr > Settings > API keys (starts with lv_). Sent as the bearer token to the lvndr MCP server."
+      }
+    },
+    "required": [
+      "LVNDR_API_KEY"
+    ]
+  }
+}

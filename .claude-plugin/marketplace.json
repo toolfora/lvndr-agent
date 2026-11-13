@@ -1,0 +1,16 @@
+{
+  "name": "lvndr",
+  "owner": {
+    "name": "HereNow Labs"
+  },
+  "metadata": {
+    "description": "lvndr, the store time machine for Shopify: MCP server and skill."
+  },
+  "plugins": [
+    {
+      "name": "lvndr",
+      "source": "./",
+      "description": "Every change to a Shopify store, who made it, and a precise undo. MCP tools plus the safe-change skill."
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+---
+description: Changing a Shopify store (Admin API, Shopify CLI, store MCP, imports). Mark a restore point first with lvndr, verify what changed, undo precisely.
+alwaysApply: false
+---
+
+# Changing a Shopify store with lvndr as the safety net
+
+Before any write to a Shopify store:
+
+1. `lvndr_status` (or `npx lvndr status`). Stop if auth fails.
+2. `lvndr_start_run` with `agent`, `task`, `markRestorePoint: true` (or `npx lvndr run start --agent cursor --task "..."`). Keep the run id.
+   For one shell command: `npx lvndr guard --agent cursor -- <command...>`.
+
+After the write:
+
+3. `lvndr_end_run`, wait 5 to 10 seconds, then `lvndr_get_run` and compare the changes with what was intended.
+4. If something is wrong, preview first, then undo the narrowest scope:
+   `lvndr_preview_undo` -> `lvndr_undo` with its `confirmation_token`, or `lvndr_undo_run` dry run then run with its token,
+   or `lvndr_preview_rollback` -> `lvndr_rollback` with its token. Always pass a `reason`.
+   Run undo, batch undo and rollback return a background `job`: poll `lvndr_get_job` until it is done, partial or failed.
+
+Never undo or roll back without reading the preview, and never when the user only asked for a report.
+Themes are tracked but not restorable; orders and customers are out of scope.
+Full workflow: the `lvndr` skill (`skills/lvndr/SKILL.md` in the lvndr-agent repository).

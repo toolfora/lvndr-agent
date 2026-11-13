@@ -1,0 +1,38 @@
+{
+  "name": "lvndr",
+  "version": "0.1.0",
+  "description": "Command line for lvndr, the Shopify store time machine: change log, undo by change, restore points and agent runs.",
+  "type": "module",
+  "bin": {
+    "lvndr": "lvndr.mjs"
+  },
+  "files": [
+    "lvndr.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "shopify",
+    "undo",
+    "backup",
+    "restore",
+    "change-log",
+    "audit",
+    "ai-agents",
+    "mcp",
+    "cli"
+  ],
+  "homepage": "https://github.com/kasazen/lvndr-agent/tree/main/cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kasazen/lvndr-agent.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/kasazen/lvndr-agent/issues"
+  },
+  "author": "HereNow Labs",
+  "license": "MIT"
+}

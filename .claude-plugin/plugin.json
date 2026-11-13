@@ -1,0 +1,27 @@
+{
+  "name": "lvndr",
+  "displayName": "lvndr",
+  "version": "0.1.0",
+  "description": "Store time machine for Shopify: every change to a store, who made it, and a precise undo. Mark a restore point before changing a store with any tool, verify what changed, undo by change, run or restore point.",
+  "author": {
+    "name": "HereNow Labs",
+    "url": "https://github.com/kasazen"
+  },
+  "homepage": "https://app-production-559c.up.railway.app/developers",
+  "repository": "https://github.com/kasazen/lvndr-agent",
+  "license": "MIT",
+  "keywords": [
+    "shopify",
+    "undo",
+    "restore",
+    "change-log",
+    "audit",
+    "backup",
+    "agents"
+  ],
+  "icon": "./assets/icon-512.png",
+  "documentationUrl": "https://app-production-559c.up.railway.app/developers",
+  "supportUrl": "https://app-production-559c.up.railway.app/support",
+  "privacyPolicyUrl": "https://app-production-559c.up.railway.app/privacy",
+  "mcpServers": "./.mcp.json"
+}
