@@ -3,7 +3,7 @@
 /**
  * lvndr CLI: the Shopify store change log, undo and restore points from a terminal or an agent.
  * One file, no dependencies, Node 20+. Talks to the public REST API (`/api/v1`) with an API key
- * made in lvndr > Settings > API keys.
+ * made in lvndr > Settings > Agents & API.
  *
  *   lvndr login                         # saves a profile to ~/.config/lvndr/config.json
  *   lvndr guard -- <command...>         # restore point + run around any command, then the undo line
@@ -12,8 +12,13 @@
  * Run, batch and rollback undos run on the server as background jobs (202 { job }); the CLI
  * polls GET /api/v1/jobs/:id every 2 s until the job is done, partial or failed.
  *
- * Exit codes: 0 ok, 1 usage or other error, 2 undo partial/failed, 3 auth (401/402/403),
- * 4 not found, 5 rate limited, 6 network. The module also exports its helpers for tests.
+ * Every write is bound to a plan someone saw: `undo --run`, `undo-batch --run`, `run undo --run`
+ * and `rollback --confirm` need the --plan-hash their preview printed. `--yes` (a person at a
+ * terminal only) previews, prints the preview and writes that plan in one go.
+ *
+ * Exit codes: 0 ok, 1 usage or other error, 2 undo partial/failed, 3 auth (401/403),
+ * 4 not found, 5 rate limited, 6 network, 7 conflict (409, e.g. plan_changed), 8 the shop's
+ * plan lacks the API (402). The module also exports its helpers for tests.
  */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -25,7 +30,7 @@ import { fileURLToPath } from "node:url";
 
 export const VERSION = "0.1.0";
 export const DEFAULT_URL = "https://app-production-559c.up.railway.app";
-export const EXIT = Object.freeze({ OK: 0, USAGE: 1, UNDO_FAILED: 2, AUTH: 3, NOT_FOUND: 4, RATE_LIMITED: 5, NETWORK: 6 });
+export const EXIT = Object.freeze({ OK: 0, USAGE: 1, UNDO_FAILED: 2, AUTH: 3, NOT_FOUND: 4, RATE_LIMITED: 5, NETWORK: 6, CONFLICT: 7, PLAN_REQUIRED: 8 });
 
 export class CliError extends Error {
   constructor(message, exitCode = EXIT.USAGE, details = {}) {
@@ -87,15 +92,16 @@ export function parseArgs(argv) {
       positionals.push(a);
     }
   }
-  if (flags.yes) flags.run = true; // --yes was the 0.0 spelling of --run
   const [command, ...args] = positionals;
   return { command, args, flags, passthrough };
 }
 
 /** HTTP status -> CLI exit code. */
 export function exitCodeForStatus(status) {
-  if (status === 401 || status === 402 || status === 403) return EXIT.AUTH;
+  if (status === 401 || status === 403) return EXIT.AUTH;
+  if (status === 402) return EXIT.PLAN_REQUIRED;
   if (status === 404) return EXIT.NOT_FOUND;
+  if (status === 409) return EXIT.CONFLICT;
   if (status === 429) return EXIT.RATE_LIMITED;
   return EXIT.USAGE;
 }
@@ -223,7 +229,7 @@ function errorFromResponse(status, text, retryAfter) {
 /** One API call. Returns parsed JSON (or text when raw). Retries 429 up to 3 times (<= 60 s). */
 export async function request(ctx, method, path, { body, query, raw = false, auth = true } = {}) {
   if (auth && !ctx.key) {
-    throw new CliError("No API key. Run `lvndr login`, set LVNDR_API_KEY, or pass --key (lvndr > Settings > API keys).", EXIT.AUTH);
+    throw new CliError("No API key. Run `lvndr login`, set LVNDR_API_KEY, or pass --key (lvndr > Settings > Agents & API).", EXIT.AUTH);
   }
   const url = new URL(`${ctx.url}/api/v1${path}`);
   for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined && v !== null && v !== false && v !== "") url.searchParams.set(k, String(v));
@@ -347,7 +353,7 @@ function undoLines(r, ran) {
   if (remaining) out.push(`not covered in this pass: ${remaining}; run it again`);
   if (typeof r.more === "number" && r.more > 0) out.push(`${r.more} more change(s) not planned in this preview (of ${r.total ?? "?"}); the undo covers them too`);
   if (!out.length) out.push(JSON.stringify(r, null, 2));
-  if (!ran) out.push("preview only; nothing was written. Re-run with --run to write.");
+  if (!ran) out.push("preview only; nothing was written.");
   return out;
 }
 
@@ -367,8 +373,33 @@ async function finishQueued(ctx, r, io, flags) {
   return { result: { ...r, job }, human: jobLines(job), quietIds: [job.id], exitCode: job.status === "done" ? EXIT.OK : EXIT.UNDO_FAILED };
 }
 
-/** The line that runs a previewed undo bound to its plan. */
-const planHashHint = (r, command) => (r?.planHash ? [`To run exactly this plan: ${command} --plan-hash ${r.planHash}`] : []);
+/**
+ * Every store write goes through here, so it is bound to a plan someone saw:
+ *   no flag                 preview, print it and the line that writes exactly that plan
+ *   --run --plan-hash <h>   write that plan (the server refuses it, 409, if the store moved)
+ *   --run without the hash  refused: preview first
+ *   --yes                   a person at a terminal: preview, print it, then write it
+ */
+async function writeFlow({ flags, io, preview, write, previewCommand, runCommand }) {
+  if (flags.yes) {
+    if (!(io.stdin ?? process.stdin).isTTY) {
+      throw new CliError(`--yes is for a person at a terminal. Preview with \`${previewCommand}\`, show the plan, then pass the --plan-hash it prints.`);
+    }
+    const r = await preview();
+    const out = flags.json || flags.quiet ? io.stderr : io.stdout;
+    for (const line of undoLines(r, true)) out.write(`${line}\n`);
+    if (!r?.planHash) throw new CliError("the preview returned no plan to write");
+    return write(r.planHash);
+  }
+  if (flags.run) {
+    if (!flags.planHash) throw new CliError(`preview first: ${previewCommand} (it prints the --plan-hash to pass; or --yes at a terminal)`);
+    return write(flags.planHash);
+  }
+  const r = await preview();
+  const hint = r?.planHash ? [`To run exactly this plan: ${runCommand} --plan-hash ${r.planHash}`] : [];
+  return { result: r, human: [...undoLines(r, false), ...hint] };
+}
+
 
 const firstArray = (r, keys) => {
   for (const k of keys) if (Array.isArray(r?.[k])) return r[k];
@@ -378,9 +409,80 @@ const firstArray = (r, keys) => {
 // ---------------------------------------------------------------------------------------------
 // Commands
 
+/** One usage line per command (and run subcommand), for errors and `lvndr <command> --help`. */
+export const USAGE = Object.freeze({
+  me: "me",
+  status: "status",
+  changes: "changes [--since 24h] [--until ISO] [--type PRODUCT] [--action update] [--resource-id Product-1] [--actor name] [--q text] [--hide-undos] [--run-id id] [--limit 50] [--cursor c]",
+  change: "change <id>",
+  history: "history <gid|Type-digits> [--cursor c]",
+  batch: "batch <id>",
+  points: "points",
+  preview: "preview <pointId>",
+  alerts: "alerts [--all]",
+  export: "export [--format csv|json] [--since 7d] [--until ISO] [--out file]",
+  openapi: "openapi",
+  undo: "undo <id> [--include-conflicts] [--reason text]  |  undo <id> --run --plan-hash <h>  |  undo <id> --yes",
+  "undo-batch": "undo-batch <id> [--reason text]  |  undo-batch <id> --run --plan-hash <h>  |  undo-batch <id> --yes",
+  mark: "mark <label...> [--reason text]",
+  rollback: "rollback <pointId> --confirm --plan-hash <h> [--reason text]  |  rollback <pointId> --yes",
+  job: "job <id>",
+  dismiss: "dismiss <alertId>",
+  "run start": "run start --agent <name> [--task text] [--client-id id] [--no-restore-point]",
+  "run end": "run end [id]",
+  "run show": "run show [id]",
+  "run list": "run list",
+  "run undo": "run undo [id] [--reason text]  |  run undo [id] --run --plan-hash <h>  |  run undo [id] --yes",
+  guard: "guard [--agent name] [--task text] [--wait 120] -- <command...>",
+  login: "login [--key lv_...] [--url URL] [--profile name] [--no-verify]",
+});
+
+/** What each command does, shown under its usage by `lvndr <command> --help`. */
+const DETAIL = {
+  me: "Which shop and key this is, with the key's scopes and the plan.",
+  status: "Plan, tracked record counts, the last activity check and pending deliveries.",
+  changes: "Changes, newest first. --since/--until take 30m, 24h, 7d, 2w or an ISO time. Pages with --cursor.",
+  change: "One change with its full before/after diff and attribution.",
+  history: "Every stored version and change of one record (gid://shopify/Product/1 or Product-1).",
+  batch: "Everything one actor did around a change (no gap over ten minutes).",
+  points: "Restore points, newest first.",
+  preview: "What rolling back to a restore point would undo. Prints the `lvndr rollback <pointId> --confirm --plan-hash <h>` line that runs exactly that plan.",
+  alerts: "Open anomaly alerts; --all includes dismissed ones.",
+  export: "Download the change log as CSV (default) or JSON.",
+  openapi: "The API's OpenAPI document.",
+  undo:
+    "Without flags: preview the undo of one change (writes nothing) and print the line that runs exactly that plan.\n--run --plan-hash <h>: write the previewed plan; refused (exit 7) if the store moved since.\n--yes: for a person at a terminal: preview, print it, then write that plan in one go.",
+  "undo-batch":
+    "Without flags: preview undoing one actor's batch around a change.\n--run --plan-hash <h>: queue that plan as a background job and wait for it.\n--yes: for a person at a terminal: preview, print it, then run it.",
+  mark: "Mark a restore point now, for example before a bulk job.",
+  rollback:
+    "Undo every change after a restore point, newest first. Preview first with `lvndr preview <pointId>`, then pass --confirm and the --plan-hash it printed.\n--yes: for a person at a terminal: preview, print it, then roll back.",
+  job: "One background undo job and its progress.",
+  dismiss: "Dismiss an anomaly alert.",
+  "run start": "Announce an agent run (marks a restore point unless --no-restore-point). Prints what the run will collect.",
+  "run end": "Close the current (or named) run.",
+  "run show": "One run, its changes and how fresh the tagging is (attributedThrough, pending deliveries).",
+  "run list": "Recent agent runs.",
+  "run undo":
+    "Without flags: preview undoing every change tagged with the run.\n--run --plan-hash <h>: queue that plan as a background job and wait for it.\n--yes: for a person at a terminal: preview, print it, then run it.",
+  guard:
+    "Start a run (with a restore point), run the command with LVNDR_RUN_ID set, end the run, then poll the run every 20 s for up to --wait seconds (default 120) until attribution has caught up, and print its changes and the undo line. --wait 0 skips waiting.",
+  login: "Save a profile (URL and key) to ~/.config/lvndr/config.json after checking the key.",
+};
+
+/** Help for one command ("undo", "run undo", or "run" for all run subcommands), or null. */
+export function commandHelp(topic) {
+  const name = String(topic ?? "").trim().replace(/\s+/g, " ");
+  if (name === "run" || name === "runs") {
+    return ["Usage:", ...Object.keys(USAGE).filter((k) => k.startsWith("run ")).map((k) => `  lvndr ${USAGE[k]}`), "", "Agent runs: announce, review and undo a unit of agent work."].join("\n");
+  }
+  if (!USAGE[name]) return null;
+  return [`Usage: lvndr ${USAGE[name].split("  |  ").join("\n       lvndr ")}`, "", DETAIL[name] ?? "", "", "Global options: --json --ndjson --quiet --key --url --profile --agent --run-id --no-retry --timeout"].join("\n");
+}
+
 const HELP = `lvndr ${VERSION}: Shopify store change log, undo and restore points
 
-Usage: lvndr <command> [options]
+Usage: lvndr <command> [options]       lvndr <command> --help for one command
 
 Read
   me                                   which shop and key this is
@@ -397,20 +499,21 @@ Read
   export [--format csv|json] [--since] [--until] [--out file]
   openapi                              the API's OpenAPI document
 
-Write (every undo previews unless --run)
-  undo <id> [--run] [--include-conflicts] [--plan-hash h] [--reason text]
-                                       --run previews first and binds the write to that plan
-  undo-batch <id> [--run] [--plan-hash h] [--reason text]
+Write (every write is bound to the plan its preview printed)
+  undo <id> [--include-conflicts]      preview; prints the line that runs exactly that plan
+  undo <id> --run --plan-hash <h>      write the previewed plan
+  undo-batch <id> [--run --plan-hash <h>]
+  run undo [id] [--run --plan-hash <h>]
+  rollback <pointId> --confirm --plan-hash <h>   (preview with: lvndr preview <pointId>)
+  --yes                                a person at a terminal: preview, print, then write
   mark <label...> [--reason text]      mark a restore point now
-  rollback <pointId> --confirm [--plan-hash h] [--reason text]
   job <id>                             one background undo job and its progress
   dismiss <alertId>
   run start --agent <name> [--task text] [--client-id id] [--no-restore-point]
   run end [id]
-  run undo [id] [--run] [--plan-hash h] [--reason text]
                                        undo-batch, run undo and rollback queue a job and wait for it
-  guard [--agent name] [--task text] [--wait 5] -- <command...>
-                                       restore point + run around a command, then the undo line
+  guard [--agent name] [--task text] [--wait 120] -- <command...>
+                                       run + restore point around a command, then the undo line
 
 Setup
   login [--key lv_...] [--url URL] [--profile name] [--no-verify]
@@ -418,11 +521,13 @@ Setup
 Global options
   --json  compact JSON on stdout     --ndjson  one JSON object per line for lists
   --quiet  ids only                  --key, --url, --profile, --agent (X-Lvndr-Agent), --run-id
-  --no-retry  fail on 429 at once    --timeout <seconds>
+  --no-retry  fail on 429 at once    --timeout <seconds>     --reason <text> on writes
 
-Exit codes: 0 ok, 1 usage/other, 2 undo partial or failed, 3 auth (401/402/403), 4 not found,
-5 rate limited, 6 network. Environment: LVNDR_API_KEY, LVNDR_API_URL, LVNDR_PROFILE,
-LVNDR_AGENT, LVNDR_RUN_ID, LVNDR_CONFIG, LVNDR_POLL_MS (job polling, default 2000).`;
+Exit codes: 0 ok, 1 usage/other, 2 undo partial or failed, 3 auth (401/403), 4 not found,
+5 rate limited, 6 network, 7 conflict (409, e.g. plan_changed: preview again), 8 the shop's
+plan lacks the API (402). Environment: LVNDR_API_KEY, LVNDR_API_URL, LVNDR_PROFILE,
+LVNDR_AGENT, LVNDR_RUN_ID, LVNDR_CONFIG, LVNDR_POLL_MS (job polling, default 2000),
+LVNDR_GUARD_POLL_MS (guard's run polling, default 20000). Keys: lvndr > Settings > Agents & API.`;
 
 function need(args, n, usage) {
   if (args.length < n || args.slice(0, n).some((a) => !a)) throw new CliError(`usage: lvndr ${usage}`);
@@ -449,9 +554,38 @@ function readLine(prompt, io) {
   });
 }
 
+/** Attribution has caught up with the run: everything up to its end is tagged, nothing pending. */
+export function runIsFresh(detail, through) {
+  if (!detail?.attributedThrough || detail.pendingDeliveries !== 0) return false;
+  return Date.parse(detail.attributedThrough) >= Date.parse(through);
+}
+
+/**
+ * Poll GET /runs/:id every LVNDR_GUARD_POLL_MS (20 s) until attribution has covered `through`
+ * and no delivery is pending, or `waitS` runs out. One read when waitS is 0. Resolves to the
+ * last run detail (or null) and whether it was fresh.
+ */
+async function waitForRun(ctx, id, through, waitS, io) {
+  const every = Number(ctx.env?.LVNDR_GUARD_POLL_MS ?? 20_000);
+  const deadline = Date.now() + Math.max(0, waitS) * 1000;
+  let detail = null;
+  for (;;) {
+    try {
+      detail = await request(ctx, "GET", `/runs/${encodeURIComponent(id)}`, { query: { limit: 200 } });
+    } catch (e) {
+      io.stderr.write(`lvndr: could not read run ${id}: ${e.message}\n`);
+      return { detail, fresh: false };
+    }
+    if (runIsFresh(detail, through)) return { detail, fresh: true };
+    if (Date.now() + every > deadline) return { detail, fresh: false };
+    io.stderr.write(`lvndr: waiting for attribution (through ${detail?.attributedThrough ?? "never"}, ${detail?.pendingDeliveries ?? "?"} pending)\n`);
+    await sleep(every);
+  }
+}
+
 async function guard(ctx, parsed, io) {
   const { flags, passthrough } = parsed;
-  if (!passthrough?.length) throw new CliError("usage: lvndr guard [--agent name] [--task text] -- <command...>");
+  if (!passthrough?.length) throw new CliError(`usage: lvndr ${USAGE.guard}`);
   const err = (s) => io.stderr.write(`${s}\n`);
   const agent = flags.agent ?? ctx.env.LVNDR_AGENT ?? "lvndr-guard";
   const started = await request({ ...ctx, agent }, "POST", "/runs", {
@@ -461,6 +595,7 @@ async function guard(ctx, parsed, io) {
   if (!id) throw new CliError("the API did not return a run id; not running the command");
   const point = started.restorePoint?.id ?? started.run?.restorePointId;
   err(`lvndr: run ${id} started${point ? `, restore point ${point}` : ""}`);
+  if (started.captureNote) err(`lvndr: capture ${started.capture ?? "?"}: ${started.captureNote}`);
 
   const childEnv = { ...ctx.env, LVNDR_RUN_ID: id, LVNDR_AGENT: agent };
   const exitCode = await new Promise((resolve) => {
@@ -481,30 +616,27 @@ async function guard(ctx, parsed, io) {
   });
 
   let endError;
+  // The run's end, on the server's clock: attribution must cover writes up to here.
+  let through = new Date().toISOString();
   try {
-    await request({ ...ctx, agent }, "POST", `/runs/${encodeURIComponent(id)}/end`, { body: { exitCode } });
+    const ended = await request({ ...ctx, agent }, "POST", `/runs/${encodeURIComponent(id)}/end`, { body: {} });
+    through = ended.run?.endedAt ?? through;
   } catch (e) {
     endError = e;
     err(`lvndr: could not end run ${id}: ${e.message}`);
   }
-  const waitS = Number(flags.wait ?? 5);
-  if (waitS > 0) await sleep(waitS * 1000); // Shopify delivers change events a few seconds late
-  let changes = [];
-  try {
-    const r = await request({ ...ctx, agent }, "GET", "/changes", { query: { runId: id, limit: 200 } });
-    changes = r.changes ?? [];
-  } catch (e) {
-    err(`lvndr: could not list the run's changes: ${e.message}`);
-  }
-  const undoLine = `lvndr run undo ${id} --run`;
+  const waitS = Number(flags.wait ?? 120);
+  if (!Number.isFinite(waitS) || waitS < 0) throw new CliError("--wait takes seconds, e.g. --wait 120");
+  const { detail, fresh } = await waitForRun({ ...ctx, agent }, id, through, waitS, io);
+  const changes = detail?.changes ?? [];
+  const previewLine = `lvndr run undo ${id}`;
   if (flags.json) {
-    err(JSON.stringify({ runId: id, restorePointId: point ?? null, exitCode, ended: !endError, changes, undo: undoLine }));
+    err(JSON.stringify({ runId: id, restorePointId: point ?? null, exitCode, ended: !endError, fresh, attributedThrough: detail?.attributedThrough ?? null, pendingDeliveries: detail?.pendingDeliveries ?? null, changes, undo: previewLine }));
   } else {
-    err(`lvndr: command exited ${exitCode}; run ${id} ${endError ? "NOT ended" : "ended"}; ${changes.length} change(s) recorded so far`);
+    err(`lvndr: command exited ${exitCode}; run ${id} ${endError ? "NOT ended" : "ended"}; ${changes.length} change(s) tagged${fresh ? "" : " so far"}`);
     for (const c of changes) err(changeLine(c));
-    if (!changes.length) err(`lvndr: changes can arrive late; check again with: lvndr changes --run-id ${id}`);
-    err(`To preview the undo:  lvndr run undo ${id}`);
-    err(`To undo this run:     ${undoLine}`);
+    if (!fresh) err(`lvndr: attribution has not caught up yet (through ${detail?.attributedThrough ?? "never"}, ${detail?.pendingDeliveries ?? "?"} pending); check again with: lvndr run show ${id}`);
+    err(`To preview the undo:  ${previewLine}   (it prints the --run --plan-hash line that runs it)`);
   }
   return exitCode;
 }
@@ -513,7 +645,7 @@ async function login(parsed, io) {
   const { flags } = parsed;
   const ctx = resolveContext(flags, io.env, { allowMissingProfile: true });
   let key = flags.key ?? ctx.env.LVNDR_API_KEY;
-  if (!key) key = await readLine("lvndr API key (Settings > API keys): ", io);
+  if (!key) key = await readLine("lvndr API key (Settings > Agents & API): ", io);
   if (!key) throw new CliError("no key given");
   const url = ctx.url;
   let me = null;
@@ -572,7 +704,7 @@ async function dispatch(parsed, io) {
       return { result: r, human, list, quietIds: list.map((c) => c.id) };
     }
     case "change": {
-      need(args, 1, "change <id>");
+      need(args, 1, USAGE.change);
       const r = await request(ctx, "GET", `/changes/${enc(args[0])}`);
       const c = r.change ?? r;
       const human = [
@@ -584,7 +716,7 @@ async function dispatch(parsed, io) {
       return { result: r, human };
     }
     case "history": {
-      need(args, 1, "history <gid|Type-digits>");
+      need(args, 1, USAGE.history);
       const r = await request(ctx, "GET", `/records/${enc(toGid(args[0]))}/history`);
       const list = firstArray(r, ["changes", "history"]) ?? [];
       const rec = r.record ?? {};
@@ -596,33 +728,34 @@ async function dispatch(parsed, io) {
       return { result: r, human, list };
     }
     case "undo": {
-      need(args, 1, "undo <id> [--run] [--include-conflicts] [--plan-hash h] [--reason text]");
+      need(args, 1, USAGE.undo);
       const path = `/changes/${enc(args[0])}/undo`;
       const includeConflicts = !!flags.includeConflicts;
-      if (!flags.run) {
-        const r = await request(ctx, "POST", path, { body: { dryRun: true, includeConflicts, reason: flags.reason } });
-        return { result: r, human: [...undoLines(r, false), ...planHashHint(r, `lvndr undo ${args[0]} --run${includeConflicts ? " --include-conflicts" : ""}`)] };
-      }
-      // Bind the write to a plan: the one the user previewed (--plan-hash), else a fresh dry run.
-      let planHash = flags.planHash;
-      if (!planHash) {
-        const preview = await request(ctx, "POST", path, { body: { dryRun: true, includeConflicts, reason: flags.reason } });
-        planHash = preview.planHash;
-      }
-      const r = await request(ctx, "POST", path, { body: { dryRun: false, includeConflicts, planHash, reason: flags.reason } });
-      return { result: r, human: undoLines(r, true), exitCode: undoFailed(r) ? EXIT.UNDO_FAILED : EXIT.OK };
+      const runCommand = `lvndr undo ${args[0]} --run${includeConflicts ? " --include-conflicts" : ""}`;
+      const preview = () => request(ctx, "POST", path, { body: { dryRun: true, includeConflicts, reason: flags.reason } });
+      const write = async (planHash) => {
+        const r = await request(ctx, "POST", path, { body: { dryRun: false, includeConflicts, planHash, reason: flags.reason } });
+        return { result: r, human: undoLines(r, true), exitCode: undoFailed(r) ? EXIT.UNDO_FAILED : EXIT.OK };
+      };
+      return writeFlow({ flags, io, preview, write, previewCommand: `lvndr undo ${args[0]}${includeConflicts ? " --include-conflicts" : ""}`, runCommand });
     }
     case "batch": {
-      need(args, 1, "batch <id>");
+      need(args, 1, USAGE.batch);
       const r = await request(ctx, "GET", `/batches/${enc(args[0])}`);
       const list = r.changes ?? [];
       return { result: r, human: [`${list.length} changes by ${r.actorLabel ?? "?"}`, ...list.map(changeLine)], list };
     }
     case "undo-batch": {
-      need(args, 1, "undo-batch <id> [--run] [--plan-hash h] [--reason text]");
-      const r = await request(ctx, "POST", `/batches/${enc(args[0])}/undo`, { body: { dryRun: !flags.run, planHash: flags.run ? flags.planHash : undefined, reason: flags.reason } });
-      if (flags.run) return finishQueued(ctx, r, io, flags);
-      return { result: r, human: [...undoLines(r, false), ...planHashHint(r, `lvndr undo-batch ${args[0]} --run`)] };
+      need(args, 1, USAGE["undo-batch"]);
+      const path = `/batches/${enc(args[0])}/undo`;
+      return writeFlow({
+        flags,
+        io,
+        preview: () => request(ctx, "POST", path, { body: { dryRun: true, reason: flags.reason } }),
+        write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { dryRun: false, planHash, reason: flags.reason } }), io, flags),
+        previewCommand: `lvndr undo-batch ${args[0]}`,
+        runCommand: `lvndr undo-batch ${args[0]} --run`,
+      });
     }
     case "points": {
       const r = await request(ctx, "GET", "/restore-points");
@@ -638,19 +771,29 @@ async function dispatch(parsed, io) {
       return { result: r, human: [`marked ${p.id} at ${p.at}${p.label ? `  ${p.label}` : ""}`], quietIds: [p.id] };
     }
     case "preview": {
-      need(args, 1, "preview <pointId>");
+      need(args, 1, USAGE.preview);
       const r = await request(ctx, "GET", `/restore-points/${enc(args[0])}/preview`);
       const hint = r.planHash ? `To roll back exactly this: lvndr rollback ${args[0]} --confirm --plan-hash ${r.planHash}` : `To roll back: lvndr rollback ${args[0]} --confirm`;
       return { result: r, human: undoLines(r.preview ?? r, true).concat(hint) };
     }
     case "rollback": {
-      need(args, 1, "rollback <pointId> --confirm [--plan-hash h] [--reason text]");
-      if (!flags.confirm) throw new CliError(`rollback writes to the store. Preview first with \`lvndr preview ${args[0]}\`, then add --confirm.`);
-      const r = await request(ctx, "POST", `/restore-points/${enc(args[0])}/rollback`, { body: { confirm: true, planHash: flags.planHash, reason: flags.reason } });
-      return finishQueued(ctx, r, io, flags);
+      need(args, 1, USAGE.rollback);
+      const path = `/restore-points/${enc(args[0])}/rollback`;
+      if (!flags.confirm && !flags.yes) throw new CliError(`rollback writes to the store. Preview first: lvndr preview ${args[0]} (it prints the --confirm --plan-hash line to run).`);
+      return writeFlow({
+        flags: { ...flags, run: true },
+        io,
+        preview: async () => {
+          const r = await request(ctx, "GET", `${path.replace(/\/rollback$/, "")}/preview`);
+          return { ...(r.preview ?? {}), planHash: r.planHash };
+        },
+        write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { confirm: true, planHash, reason: flags.reason } }), io, flags),
+        previewCommand: `lvndr preview ${args[0]}`,
+        runCommand: `lvndr rollback ${args[0]} --confirm`,
+      });
     }
     case "job": {
-      need(args, 1, "job <id>");
+      need(args, 1, USAGE.job);
       const r = await request(ctx, "GET", `/jobs/${enc(args[0])}`);
       const job = r.job ?? r;
       const failed = job.status === "partial" || job.status === "failed";
@@ -664,7 +807,7 @@ async function dispatch(parsed, io) {
       return { result: r, human, list, quietIds: list.map((a) => a.id) };
     }
     case "dismiss": {
-      need(args, 1, "dismiss <alertId>");
+      need(args, 1, USAGE.dismiss);
       const r = await request(ctx, "POST", `/alerts/${enc(args[0])}/dismiss`, { body: {} });
       return { result: r, human: [`dismissed ${args[0]}`] };
     }
@@ -673,7 +816,7 @@ async function dispatch(parsed, io) {
       const sub = command === "runs" ? "list" : args[0];
       const id = args[1];
       if (sub === "start") {
-        if (!flags.agent) throw new CliError("usage: lvndr run start --agent <name> [--task text] [--client-id id] [--no-restore-point]");
+        if (!flags.agent) throw new CliError(`usage: lvndr ${USAGE["run start"]}`);
         const r = await request(ctx, "POST", "/runs", { body: { agent: flags.agent, task: flags.task, clientId: flags.clientId, markRestorePoint: !flags.noRestorePoint } });
         const runId = runIdOf(r);
         if (runId) {
@@ -681,7 +824,7 @@ async function dispatch(parsed, io) {
           saveConfig(ctx.config, ctx.env);
         }
         const point = r.restorePoint?.id ?? r.run?.restorePointId;
-        return { result: r, human: [`run ${runId} started${point ? `, restore point ${point}` : ""}`, `export LVNDR_RUN_ID=${runId}`], quietIds: [runId] };
+        return { result: r, human: [`run ${runId} started${point ? `, restore point ${point}` : ""}`, ...(r.captureNote ? [`capture ${r.capture ?? "?"}: ${r.captureNote}`] : []), `export LVNDR_RUN_ID=${runId}`], quietIds: [runId] };
       }
       if (sub === "end") {
         const runId = currentRun(ctx, id);
@@ -691,7 +834,7 @@ async function dispatch(parsed, io) {
           saveConfig(ctx.config, ctx.env);
         }
         const run = r.run ?? r;
-        return { result: r, human: [`run ${runId} ended${run.changeCount !== undefined ? `; ${run.changeCount} change(s)` : ""}`, `To undo it: lvndr run undo ${runId} --run`] };
+        return { result: r, human: [`run ${runId} ended${run.changeCount !== undefined ? `; ${run.changeCount} change(s) so far` : ""}`, `Changes arrive over a few minutes; review with: lvndr run show ${runId}`, `To preview the undo:  lvndr run undo ${runId}`] };
       }
       if (sub === "show") {
         const runId = currentRun(ctx, id);
@@ -700,7 +843,12 @@ async function dispatch(parsed, io) {
         const list = r.changes ?? run.changes ?? [];
         return {
           result: r,
-          human: [`${run.id}  ${run.agent ?? ""}  ${run.task ?? ""}`, `started ${run.startedAt ?? "?"}  ended ${run.endedAt ?? "running"}${run.restorePointId ? `  restore point ${run.restorePointId}` : ""}`, ...list.map(changeLine)],
+          human: [
+            `${run.id}  ${run.agent ?? ""}  ${run.task ?? ""}`,
+            `started ${run.startedAt ?? "?"}  ended ${run.endedAt ?? "running"}${run.restorePointId ? `  restore point ${run.restorePointId}` : ""}`,
+            `attributed through ${r.attributedThrough ?? "never"}  pending deliveries ${r.pendingDeliveries ?? "?"}`,
+            ...list.map(changeLine),
+          ],
           list,
         };
       }
@@ -713,11 +861,17 @@ async function dispatch(parsed, io) {
       }
       if (sub === "undo") {
         const runId = currentRun(ctx, id);
-        const r = await request(ctx, "POST", `/runs/${enc(runId)}/undo`, { body: { dryRun: !flags.run, planHash: flags.run ? flags.planHash : undefined, reason: flags.reason } });
-        if (flags.run) return finishQueued(ctx, r, io, flags);
-        return { result: r, human: [...undoLines(r, false), ...planHashHint(r, `lvndr run undo ${runId} --run`)] };
+        const path = `/runs/${enc(runId)}/undo`;
+        return writeFlow({
+          flags,
+          io,
+          preview: () => request(ctx, "POST", path, { body: { dryRun: true, reason: flags.reason } }),
+          write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { dryRun: false, planHash, reason: flags.reason } }), io, flags),
+          previewCommand: `lvndr run undo ${runId}`,
+          runCommand: `lvndr run undo ${runId} --run`,
+        });
       }
-      throw new CliError("usage: lvndr run start|end|show|list|undo");
+      throw new CliError(`usage: lvndr run start|end|show|list|undo\n\n${commandHelp("run")}`);
     }
     case "export": {
       const text = await request(ctx, "GET", "/export", { raw: true, query: { format: flags.format, since: toIso(flags.since), until: toIso(flags.until) } });
@@ -752,8 +906,16 @@ export async function main(argv, io = {}) {
     return EXIT.OK;
   }
   if (!command || command === "help" || flags.help) {
-    io.stdout.write(`${HELP}\n`);
-    return command && command !== "help" && !flags.help ? EXIT.USAGE : EXIT.OK;
+    // `lvndr undo --help`, `lvndr help undo`, `lvndr run undo --help`: that command's usage.
+    const words = command === "help" ? parsed.args : command ? [command, ...parsed.args] : [];
+    const topic = words.join(" ");
+    const text = words.length ? (commandHelp(words.slice(0, 2).join(" ")) ?? commandHelp(words[0])) : null;
+    if (topic && !text) {
+      io.stderr.write(`lvndr: no command "${topic}"\n\n${HELP}\n`);
+      return EXIT.USAGE;
+    }
+    io.stdout.write(`${text ?? HELP}\n`);
+    return EXIT.OK;
   }
   try {
     if (command === "guard") return await guard(resolveContext(flags, io.env), parsed, io);
