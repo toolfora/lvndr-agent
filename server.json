@@ -12,15 +12,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://app-production-559c.up.railway.app/mcp",
-      "headers": [
-        {
-          "name": "Authorization",
-          "description": "\"Bearer \" followed by an lvndr API key from lvndr > Settings > Agents & API",
-          "isRequired": true,
-          "isSecret": true
-        }
-      ]
+      "url": "https://app-production-559c.up.railway.app/mcp"
     }
   ]
 }

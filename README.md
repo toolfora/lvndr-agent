@@ -16,30 +16,44 @@ field. The lvndr Shopify app must be installed on the store. This repository hol
 - OpenAPI: <https://app-production-559c.up.railway.app/api/v1/openapi.json>
 - Operator guide: [`docs/AGENT-PLAYBOOK.md`](docs/AGENT-PLAYBOOK.md)
 
-## Get a key
+## Step 0: install lvndr on the store
 
-MCP endpoint: `https://app-production-559c.up.railway.app/mcp` (Streamable HTTP). Every client
-below sends `Authorization: Bearer <key>`. Create a key in **lvndr > Settings > Agents & API**
-(starts with `lv_`, shown once) and export it:
+Install the lvndr Shopify app on the store and wait for its first snapshot (the app's change log
+shows the progress; a few minutes for most catalogues). Then connect your agent and call
+`lvndr_status` (CLI: `lvndr status`) to confirm which store it reached.
+
+## Connect
+
+MCP endpoint: `https://app-production-559c.up.railway.app/mcp` (Streamable HTTP).
+
+The first option for every client is keyless: give it only the URL, and it signs in through the
+Shopify admin with OAuth (you pick the store and approve the scopes). The second option is an API
+key: create one in **lvndr > Settings > Agents & API** (starts with `lv_`, shown once), export
+it, and send it as `Authorization: Bearer <key>`:
 
 ```sh
 export LVNDR_API_KEY=lv_...
 ```
 
 API access is included on every lvndr plan and free on development stores. New keys can read
-and undo; rollback and export are opt-in per key. Clients that support MCP
-OAuth (Claude, Cursor) can also connect with only the URL and sign in through the Shopify admin.
+and undo; rollback and export are opt-in per key.
 
 ## Claude Code
 
-Plugin (MCP server + skill; reads `LVNDR_API_KEY` from the environment):
+Plugin (MCP server + skill; signs in with OAuth on first use):
 
 ```
 /plugin marketplace add kasazen/lvndr-agent
 /plugin install lvndr@lvndr
 ```
 
-Or the MCP server alone:
+Or the MCP server alone, keyless (then run `/mcp` in Claude Code to sign in):
+
+```sh
+claude mcp add -t http lvndr https://app-production-559c.up.railway.app/mcp
+```
+
+With an API key instead:
 
 ```sh
 claude mcp add -t http -H "Authorization: Bearer $LVNDR_API_KEY" lvndr https://app-production-559c.up.railway.app/mcp
@@ -47,7 +61,14 @@ claude mcp add -t http -H "Authorization: Bearer $LVNDR_API_KEY" lvndr https://a
 
 ## Cursor
 
-One-click install (Cursor reads `LVNDR_API_KEY` from its environment):
+Keyless: add the URL to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project); Cursor signs in
+with OAuth when the server is first used:
+
+```json
+{ "mcpServers": { "lvndr": { "url": "https://app-production-559c.up.railway.app/mcp" } } }
+```
+
+With an API key, one-click install (Cursor reads `LVNDR_API_KEY` from its environment):
 
 ```
 cursor://anysphere.cursor-deeplink/mcp/install?name=lvndr&config=eyJ1cmwiOiJodHRwczovL2FwcC1wcm9kdWN0aW9uLTU1OWMudXAucmFpbHdheS5hcHAvbWNwIiwiaGVhZGVycyI6eyJBdXRob3JpemF0aW9uIjoiQmVhcmVyICR7ZW52OkxWTkRSX0FQSV9LRVl9In19
@@ -55,9 +76,8 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=lvndr&config=eyJ1cmwiOiJodHR
 
 The `config` value is the base64 of
 `{"url":"https://app-production-559c.up.railway.app/mcp","headers":{"Authorization":"Bearer ${env:LVNDR_API_KEY}"}}`.
-The Cursor plugin in [`.cursor-plugin/`](.cursor-plugin/plugin.json) bundles the same server, the
-skill and the rule in [`rules/lvndr.mdc`](rules/lvndr.mdc); it asks for the key as the plugin
-variable `LVNDR_API_KEY`.
+The Cursor plugin in [`.cursor-plugin/`](.cursor-plugin/plugin.json) bundles the URL-only server
+(OAuth), the skill and the rule in [`rules/lvndr.mdc`](rules/lvndr.mdc).
 
 ## VS Code
 
@@ -79,8 +99,8 @@ bearer_token_env_var = "LVNDR_API_KEY"
 ```
 
 [`.codex-plugin/plugin.json`](.codex-plugin/plugin.json) packages the skill and points at
-[`.mcp.json`](.mcp.json) (`codex plugin marketplace add kasazen/lvndr-agent`). If your Codex build
-does not expand `${LVNDR_API_KEY}` in plugin MCP headers, use the `config.toml` snippet above.
+[`.mcp.json`](.mcp.json), the URL-only server (`codex plugin marketplace add kasazen/lvndr-agent`).
+If your Codex build does not do MCP OAuth, use the `config.toml` snippet above with a key.
 
 ## Claude Desktop
 
@@ -105,8 +125,8 @@ Through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote), in
 npx lvndr login                       # paste the key; saved to ~/.config/lvndr/config.json
 npx lvndr status
 npx lvndr changes --since 24h
-npx lvndr undo <changeId>             # preview
-npx lvndr undo <changeId> --run       # write
+npx lvndr undo <changeId>             # preview; prints the --plan-hash to write it
+npx lvndr undo <changeId> --run --plan-hash <hash>   # write exactly that plan
 npx lvndr guard -- shopify store execute --allow-mutations ...   # run + restore point around a command
 ```
 
@@ -131,7 +151,7 @@ The skill follows the [Agent Skills](https://agentskills.io/specification) forma
 | `.claude-plugin/` | Claude Code plugin and marketplace manifests |
 | `.cursor-plugin/` | Cursor plugin manifest and its MCP config |
 | `.codex-plugin/` | Codex plugin manifest |
-| `.mcp.json` | The lvndr HTTP MCP server, bearer from `LVNDR_API_KEY` (no secrets) |
+| `.mcp.json` | The lvndr HTTP MCP server, URL only (OAuth sign-in; no secrets) |
 | `skills/lvndr/` | The safe-change skill and its references |
 | `rules/lvndr.mdc` | Cursor rule (opt-in) |
 | `cli/` | The `lvndr` npm package |

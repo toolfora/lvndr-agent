@@ -1,10 +1,7 @@
 {
   "mcpServers": {
     "lvndr": {
-      "url": "https://app-production-559c.up.railway.app/mcp",
-      "headers": {
-        "Authorization": "Bearer ${LVNDR_API_KEY}"
-      }
+      "url": "https://app-production-559c.up.railway.app/mcp"
     }
   }
 }

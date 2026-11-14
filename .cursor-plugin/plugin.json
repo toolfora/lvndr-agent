@@ -19,18 +19,5 @@
   "logo": "assets/icon-512.png",
   "skills": "./skills/",
   "rules": "./rules/lvndr.mdc",
-  "mcpServers": "./.cursor-plugin/mcp.json",
-  "variables": {
-    "type": "object",
-    "properties": {
-      "LVNDR_API_KEY": {
-        "type": "string",
-        "title": "lvndr API key",
-        "description": "Key from lvndr > Settings > API keys (starts with lv_). Sent as the bearer token to the lvndr MCP server."
-      }
-    },
-    "required": [
-      "LVNDR_API_KEY"
-    ]
-  }
+  "mcpServers": "./.cursor-plugin/mcp.json"
 }
