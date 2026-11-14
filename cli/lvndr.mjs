@@ -433,7 +433,7 @@ export const USAGE = Object.freeze({
   "run show": "run show [id]",
   "run list": "run list",
   "run undo": "run undo [id] [--reason text]  |  run undo [id] --run --plan-hash <h>  |  run undo [id] --yes",
-  guard: "guard [--agent name] [--task text] [--wait 120] -- <command...>",
+  guard: "guard [--agent name] [--task text] [--wait 300] -- <command...>",
   login: "login [--key lv_...] [--url URL] [--profile name] [--no-verify]",
 });
 
@@ -466,7 +466,7 @@ const DETAIL = {
   "run undo":
     "Without flags: preview undoing every change tagged with the run.\n--run --plan-hash <h>: queue that plan as a background job and wait for it.\n--yes: for a person at a terminal: preview, print it, then run it.",
   guard:
-    "Start a run (with a restore point), run the command with LVNDR_RUN_ID set, end the run, then poll the run every 20 s for up to --wait seconds (default 120) until attribution has caught up, and print its changes and the undo line. --wait 0 skips waiting.",
+    "Start a run (with a restore point), run the command with LVNDR_RUN_ID set, end the run, then poll the run every 20 s for up to --wait seconds (default 300) until attribution has caught up, and print its changes and the undo line. --wait 0 skips waiting.",
   login: "Save a profile (URL and key) to ~/.config/lvndr/config.json after checking the key.",
 };
 
@@ -512,7 +512,7 @@ Write (every write is bound to the plan its preview printed)
   run start --agent <name> [--task text] [--client-id id] [--no-restore-point]
   run end [id]
                                        undo-batch, run undo and rollback queue a job and wait for it
-  guard [--agent name] [--task text] [--wait 120] -- <command...>
+  guard [--agent name] [--task text] [--wait 300] -- <command...>
                                        run + restore point around a command, then the undo line
 
 Setup
@@ -625,8 +625,8 @@ async function guard(ctx, parsed, io) {
     endError = e;
     err(`lvndr: could not end run ${id}: ${e.message}`);
   }
-  const waitS = Number(flags.wait ?? 120);
-  if (!Number.isFinite(waitS) || waitS < 0) throw new CliError("--wait takes seconds, e.g. --wait 120");
+  const waitS = Number(flags.wait ?? 300);
+  if (!Number.isFinite(waitS) || waitS < 0) throw new CliError("--wait takes seconds, e.g. --wait 300");
   const { detail, fresh } = await waitForRun({ ...ctx, agent }, id, through, waitS, io);
   const changes = detail?.changes ?? [];
   const previewLine = `lvndr run undo ${id}`;

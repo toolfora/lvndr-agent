@@ -43,7 +43,7 @@ Follow these steps every time you are about to write to a store, whatever tool d
    API or CLI, send the run id (`X-Lvndr-Run-Id`, or `LVNDR_RUN_ID` in the environment) so they
    are tagged to the run.
 4. **End the run.** `lvndr_end_run` (CLI: `lvndr run end`).
-5. **Verify, once lvndr has caught up.** Changes are tagged within 1-2 minutes (collection rules,
+5. **Verify, once lvndr has caught up.** Changes are tagged within about 4 minutes (collection rules,
    SEO, menus and themes up to 10, from a 10-minute check). Poll `lvndr_get_run` (CLI:
    `lvndr run show <id> --json`) about every 20 seconds until `attributedThrough` is after your
    last write and `pendingDeliveries` is 0; do not judge the run from an earlier read. Then compare

@@ -43,7 +43,7 @@ everything else alone.
 - MCP: `lvndr_start_run` (`markRestorePoint: true`) ... `lvndr_end_run`.
 - CLI: `lvndr run start --agent <name> --task "<task>"` ... `lvndr run end`.
 - One command: `lvndr guard --agent <name> -- <command...>` starts the run with a restore point,
-  runs the command with `LVNDR_RUN_ID` set, ends the run, waits (up to `--wait`, default 120 s)
+  runs the command with `LVNDR_RUN_ID` set, ends the run, waits (up to `--wait`, default 300 s)
   until the run's changes are attributed, lists what changed and prints the undo preview line. It
   exits with the command's exit code.
 
@@ -52,7 +52,7 @@ lvndr guard --agent price-bot -- shopify store execute --allow-mutations \
   --store example.myshopify.com --query-file update-prices.graphql
 ```
 
-Runs show in the app under **Runs**. Changes are tagged to a run within a minute or two; collection
+Runs show in the app under **Runs**. Changes are tagged to a run within about 4 minutes; collection
 rules, SEO, menus and themes come from a 10-minute check, and alt text from the daily sweep. Before
 calling a run clean, poll `lvndr_get_run` / `GET /api/v1/runs/:id` about every 20 seconds until
 `attributedThrough` is after the last write and `pendingDeliveries` is 0.

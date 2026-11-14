@@ -78,7 +78,7 @@ lvndr_get_run {id}  every ~20 s until attributedThrough is after your last write
             lvndr_get_job {id: job.id} every few seconds until status is done, partial or failed
 ```
 
-Changes are tagged within 1-2 minutes; collection rules, SEO, menus and themes come from a
+Changes are tagged within about 4 minutes; collection rules, SEO, menus and themes come from a
 10-minute check and can take up to 10. Do not review a run before `attributedThrough` has passed
 your last write.
 

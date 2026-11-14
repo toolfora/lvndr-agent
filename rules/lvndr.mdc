@@ -14,7 +14,7 @@ Before any write to a Shopify store:
 After the write:
 
 3. `lvndr_end_run`, then poll `lvndr_get_run` about every 20 s until `attributedThrough` is after your last write and `pendingDeliveries` is 0
-   (changes are tagged within 1-2 minutes; collection rules, SEO, menus and themes up to 10). Then compare the changes with what was intended.
+   (changes are tagged within about 4 minutes; collection rules, SEO, menus and themes up to 10). Then compare the changes with what was intended.
 4. If something is wrong, preview first, then undo the narrowest scope:
    `lvndr_preview_undo` -> `lvndr_undo`, `lvndr_preview_undo_run` -> `lvndr_undo_run`, `lvndr_preview_undo_batch` -> `lvndr_undo_batch`,
    or `lvndr_preview_rollback` -> `lvndr_rollback`, each write with the preview's `confirmation_token`. Always pass a `reason`.

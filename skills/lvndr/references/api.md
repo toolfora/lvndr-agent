@@ -83,7 +83,7 @@ Preview again on `plan_changed`. The CLI sends `--plan-hash`, which every previe
 own OAuth client) or `none` (a Settings key: nothing is captured). `clientId` is used only when it
 equals the key's own OAuth client id; otherwise it is ignored and `captureNote` says so.
 
-Changes are tagged within 1-2 minutes (collection rules, SEO, menus and themes up to 10, from a
+Changes are tagged within about 4 minutes (collection rules, SEO, menus and themes up to 10, from a
 10-minute check). After your last write, poll `GET /runs/:id` about every 20 s until
 `attributedThrough` is after that write and `pendingDeliveries` is 0, then review the changes.
 

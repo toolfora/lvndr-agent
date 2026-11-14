@@ -89,7 +89,7 @@ prints one command's usage.
 | `lvndr run list` | Recent runs |
 | `lvndr run undo [id] [--run --plan-hash h \| --yes] [--reason text]` | Preview or undo every change in the run (a job) |
 | `lvndr export [--format csv\|json] [--since] [--until] [--out file]` | Download the change log |
-| `lvndr guard [--agent name] [--task text] [--wait 120] -- <command...>` | Run a command inside a run with a restore point (below) |
+| `lvndr guard [--agent name] [--task text] [--wait 300] -- <command...>` | Run a command inside a run with a restore point (below) |
 | `lvndr login` | Save a profile |
 | `lvndr openapi` | Print the OpenAPI document |
 | `lvndr help [command]`, `lvndr <command> --help`, `lvndr --version` | All commands, or one command's usage |
@@ -159,10 +159,10 @@ interval.
 ## Guard: a run around any command
 
 `guard` starts a run with a restore point, runs the command with inherited stdio and
-`LVNDR_RUN_ID` / `LVNDR_AGENT` in its environment and ends the run. Changes are tagged within a
-minute or two (collection rules, SEO, menus and themes up to 10, from a 10-minute check), so it
+`LVNDR_RUN_ID` / `LVNDR_AGENT` in its environment and ends the run. Changes are tagged within about
+4 minutes (collection rules, SEO, menus and themes up to 10, from a 10-minute check), so it
 then polls `GET /api/v1/runs/:id` about every 20 seconds until `attributedThrough` is after the
-run's end and `pendingDeliveries` is 0, for at most `--wait` seconds (default 120; `--wait 0`
+run's end and `pendingDeliveries` is 0, for at most `--wait` seconds (default 300; `--wait 0`
 skips waiting). Then it lists the run's changes and prints the undo lines. Its own report goes to stderr, so the command's stdout is untouched. If the run
 cannot be started, the command is not run.
 

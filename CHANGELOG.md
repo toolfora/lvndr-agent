@@ -8,7 +8,7 @@
   need `planHash` (400 `plan_required` without it); the CLI needs `--plan-hash` with `--run`, or
   `--yes` at a terminal.
 - `lvndr_get_run` / `GET /runs/:id` report `attributedThrough` and `pendingDeliveries`; agents poll
-  them instead of sleeping. `guard` waits up to `--wait 120` that way.
+  them instead of sleeping. `guard` waits up to `--wait 300` that way.
 - `lvndr_search_changes` takes `resourceId`. The two deprecated alias tools (list changes,
   batch) are gone; use `lvndr_search_changes` and `lvndr_get_batch`.
 - Runs report `capture`: only keys with `undo` open catch-all runs.
