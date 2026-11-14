@@ -27,6 +27,7 @@ Scale 300/60, development stores 120/20).
 ```sh
 lvndr login                                  # prompts for the key, checks it with GET /me
 lvndr login --key lv_... --profile staging --url https://my-tunnel.example.com
+lvndr login --key lv_... --agent nightly-import --no-verify   # save an agent name; skip the GET /me check
 ```
 
 `login` writes `~/.config/lvndr/config.json` (mode 600; `$XDG_CONFIG_HOME` and `$LVNDR_CONFIG`
@@ -39,7 +40,7 @@ Where each setting comes from, first match wins:
 | API key | `--key` | `LVNDR_API_KEY` | `key` | none (exit 3) |
 | App URL | `--url` | `LVNDR_API_URL` | `url` | `https://app-production-559c.up.railway.app` |
 | Profile | `--profile` | `LVNDR_PROFILE` | | `defaultProfile`, else `default` |
-| Agent name (`X-Lvndr-Agent`) | `--agent` | `LVNDR_AGENT` | `agent` | `lvndr-cli` |
+| Agent name (`X-Lvndr-Agent`) | `--agent` | `LVNDR_AGENT` | `agent` | `lvndr-cli` (`guard`: `lvndr-guard`) |
 | Run id (`X-Lvndr-Run-Id`) | `--run-id` | `LVNDR_RUN_ID` | | none |
 
 ## Commands
@@ -81,7 +82,7 @@ prints one command's usage.
 | `lvndr preview <pointId>` | What rolling back to a point would undo |
 | `lvndr rollback <pointId> (--confirm --plan-hash h \| --yes) [--reason text]` | Undo everything after the point, newest first (a job); preview with `lvndr preview` |
 | `lvndr job <id>` | One background undo job: status, counts and per-change results |
-| `lvndr alerts [--all]` | Open anomaly alerts (`--all` adds dismissed ones) |
+| `lvndr alerts [--all]` | Open anomaly alerts (`--all` adds dismissed and resolved ones) |
 | `lvndr dismiss <alertId>` | Dismiss an alert |
 | `lvndr run start --agent <name> [--task text] [--client-id id] [--no-restore-point]` | Open an agent run with a restore point; saves it as the current run for the profile and prints what the run will capture |
 | `lvndr run end [id]` | End the run (default: the current run) |
@@ -89,8 +90,8 @@ prints one command's usage.
 | `lvndr run list` | Recent runs |
 | `lvndr run undo [id] [--run --plan-hash h \| --yes] [--reason text]` | Preview or undo every change in the run (a job) |
 | `lvndr export [--format csv\|json] [--since] [--until] [--out file]` | Download the change log |
-| `lvndr guard [--agent name] [--task text] [--wait 300] -- <command...>` | Run a command inside a run with a restore point (below) |
-| `lvndr login` | Save a profile |
+| `lvndr guard [--agent name] [--task text] [--client-id id] [--no-restore-point] [--wait 300] -- <command...>` | Run a command inside a run with a restore point (below) |
+| `lvndr login [--key k] [--url u] [--profile p] [--agent a] [--no-verify]` | Save a profile (checks the key with `GET /me` unless `--no-verify`) |
 | `lvndr openapi` | Print the OpenAPI document |
 | `lvndr help [command]`, `lvndr <command> --help`, `lvndr --version` | All commands, or one command's usage |
 
@@ -102,8 +103,8 @@ the run saved by `run start`.
 `run start` prints what the run will capture. A key with the `undo` scope opens a catch-all run
 (`all-unattributed`: every change Shopify leaves unattributed or only inferred, staff edits
 included, for up to 24 hours). A key without `undo` gets a run that captures only changes linked
-to its own OAuth client (`client`), or nothing (`none`) for a Settings key; `--client-id` is used
-only when it is the key's own OAuth client id.
+to its own OAuth client (`client`), or nothing (`none`) for a Settings key. `--client-id` is used
+only when it is the key's own OAuth client id, and then the run is `client`.
 
 ### Global flags
 
@@ -147,7 +148,7 @@ interval.
 | 0 | OK. An undo preview is OK. |
 | 1 | Usage error (including `--run` without `--plan-hash`), bad parameter (400), or server error |
 | 2 | Undo, batch undo, run undo or rollback finished `partial` or `failed` (also `lvndr job` on such a job) |
-| 3 | Auth: no key, 401 (bad or revoked key), 403 (missing scope, app uninstalled) |
+| 3 | Auth: no key, 401 (bad, revoked or expired key), 403 (missing scope, app not installed) |
 | 4 | Not found (404) |
 | 5 | Rate limited (429) after retries |
 | 6 | Network: the app could not be reached |
@@ -163,18 +164,20 @@ interval.
 4 minutes (collection rules, SEO, menus and themes up to 10, from a 10-minute check), so it
 then polls `GET /api/v1/runs/:id` about every 20 seconds until `attributedThrough` is after the
 run's end and `pendingDeliveries` is 0, for at most `--wait` seconds (default 300; `--wait 0`
-skips waiting). Then it lists the run's changes and prints the undo lines. Its own report goes to stderr, so the command's stdout is untouched. If the run
-cannot be started, the command is not run.
+skips waiting). Then it lists the run's changes and prints the undo line; if attribution has not
+caught up by then, it says so and names `lvndr run show <id>`. Its own report goes to stderr (with
+`--json`, one JSON line on stderr), so the command's stdout is untouched. If the run cannot be
+started, the command is not run.
 
 ```sh
 $ lvndr guard --agent bulk-price-fix -- shopify store execute --allow-mutations \
     --store example.myshopify.com --query-file raise-prices.graphql
 lvndr: run cm9run0000000000000000001 started, restore point cm9pt00000000000000000001
+lvndr: capture all-unattributed: This run records every change Shopify left unattributed ...
 ... shopify output ...
-lvndr: command exited 0; run cm9run0000000000000000001 ended; 3 change(s) recorded so far
+lvndr: command exited 0; run cm9run0000000000000000001 ended; 3 change(s) tagged
 cm9ch00000000000000000001  2026-11-13 10:02:11 PRODUCT    update The Minimal Snowboard ...
-To preview the undo:  lvndr run undo cm9run0000000000000000001
-                      (it prints the --run --plan-hash line that writes it)
+To preview the undo:  lvndr run undo cm9run0000000000000000001   (it prints the --run --plan-hash line that runs it)
 ```
 
 Changes made by other tools are tagged to the run by the server; writes made through the lvndr

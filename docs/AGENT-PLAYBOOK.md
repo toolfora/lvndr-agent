@@ -52,21 +52,23 @@ lvndr guard --agent price-bot -- shopify store execute --allow-mutations \
   --store example.myshopify.com --query-file update-prices.graphql
 ```
 
-Runs show in the app under **Runs**. Changes are tagged to a run within about 4 minutes; collection
+Runs show in the app under **Agent runs**. Changes are tagged to a run within about 4 minutes; collection
 rules, SEO, menus and themes come from a 10-minute check, and alt text from the daily sweep. Before
 calling a run clean, poll `lvndr_get_run` / `GET /api/v1/runs/:id` about every 20 seconds until
 `attributedThrough` is after the last write and `pendingDeliveries` is 0.
 
 ## 3. Hear about trouble
 
-lvndr raises an anomaly alert when one actor changes more than the shop's threshold of records
-(default 10 in 10 minutes). Actors that look like agents, CLIs or automation trip it at half the
-threshold (minimum 3). Alerts appear as a banner on the change log, by email when an alert address
-is set, and by webhook.
+lvndr raises an anomaly alert when one actor changes at least the shop's threshold of records
+within its window (default 10 in 10 minutes; both are set in **Settings > Alerts**). Actors that
+look like agents, CLIs or automation trip it at half the threshold (minimum 3); **Settings > Treat
+these as agents** adds your own. Alerts need a plan that includes them (Growth, Scale and
+development stores). They appear as a banner on the change log, by email when an alert address is
+set, and by webhook. An alert whose burst you undo as a batch, run or rollback is marked resolved.
 
-**Alert webhook.** In **Settings**, set an https URL. lvndr POSTs each new or growing burst as
-JSON with `X-Lvndr-Event: alert.burst` and `X-Lvndr-Signature: sha256=<hex>`, an HMAC-SHA256 of
-the raw body with the webhook secret shown in Settings:
+**Alert webhook.** In **Settings > Alert webhook**, set an https URL and generate a signing
+secret. lvndr POSTs each new or growing burst as JSON with `X-Lvndr-Event: alert.burst` and, once a
+secret exists, `X-Lvndr-Signature: sha256=<hex>`, an HMAC-SHA256 of the raw body with that secret:
 
 ```json
 {
@@ -83,7 +85,7 @@ chat, or call `lvndr batch <anchorChangeId>` to list the burst.
 
 ## 4. When an agent goes wrong
 
-1. **Stop the agent.** Revoke its key in Settings if it may keep going; revoke its Shopify access
+1. **Stop the agent.** Revoke its key in **Settings > Agents & API** if it may keep going; revoke its Shopify access
    too if it writes through its own token.
 2. **Find the damage.** `lvndr alerts`, then `lvndr run show <runId>` or
    `lvndr batch <anchorChangeId>`, or `lvndr changes --since 1h --actor <name>`. Check the
@@ -115,6 +117,7 @@ chat, or call `lvndr batch <anchorChangeId>` to list the burst.
 
 - Themes are tracked but not written back; lvndr shows the earlier value for a manual restore.
 - Orders, customers and other protected data are not tracked.
-- An undone delete comes back with a new id and without inventory history.
+- An undone delete comes back with a new id. A rebuilt product has no media, inventory
+  quantities or sales-channel publication; a deleted theme cannot be rebuilt.
 - Shopify never names the staff member behind a field edit; per-edit names are not available.
 - Changes older than the plan's retention cannot be undone.

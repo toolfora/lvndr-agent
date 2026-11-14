@@ -1,7 +1,7 @@
 {
   "name": "lvndr",
   "version": "0.1.0",
-  "description": "Store time machine for Shopify: the safe-change skill for lvndr (restore point first, verify what changed, undo precisely) and the lvndr MCP server, authenticated with LVNDR_API_KEY.",
+  "description": "Store time machine for Shopify: the safe-change skill for lvndr (restore point first, verify what changed, undo precisely) and the lvndr MCP server (OAuth sign-in, or a bearer LVNDR_API_KEY).",
   "author": {
     "name": "HereNow Labs",
     "url": "https://github.com/kasazen"

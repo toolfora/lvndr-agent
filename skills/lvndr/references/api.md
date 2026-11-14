@@ -48,9 +48,10 @@ are opt-in when the key is made.
 | `POST /batches/:id/undo` | undo | `{dryRun, planHash, reason}`; dry run 200, real run (with `planHash`) 202 `{job}` | `lvndr undo-batch <id> [--run --plan-hash h]` |
 | `GET /restore-points` | read | | `lvndr points` |
 | `POST /restore-points` | read | `{label, reason}` | `lvndr mark <label>` |
+| `GET /restore-points/:id` | read | one restore point | |
 | `GET /restore-points/:id/preview` | read | returns `{preview, planHash}` | `lvndr preview <id>` |
 | `POST /restore-points/:id/rollback` | rollback | `{confirm: true, planHash, reason}`, both required; 202 `{pointId, job}` | `lvndr rollback <id> --confirm --plan-hash h` |
-| `GET /alerts` | read | `status=open|dismissed|all` | `lvndr alerts [--all]` |
+| `GET /alerts` | read | `status=open|dismissed|all` (`all` also lists `resolved`), `limit` | `lvndr alerts [--all]` |
 | `POST /alerts/:id/dismiss` | read | | `lvndr dismiss <id>` |
 | `POST /runs` | read | `{agent, task, clientId, markRestorePoint}` (`markRestorePoint` defaults to true); returns `{run, capture, captureNote}` | `lvndr run start --agent <name>` |
 | `GET /runs` | read | `limit, open` | `lvndr run list` |
@@ -81,7 +82,8 @@ Preview again on `plan_changed`. The CLI sends `--plan-hash`, which every previe
 (`all-unattributed`): every change Shopify leaves unattributed or only inferred while it is open
 (up to 24 h), staff edits included. A key without `undo` gets `client` (only changes linked to its
 own OAuth client) or `none` (a Settings key: nothing is captured). `clientId` is used only when it
-equals the key's own OAuth client id; otherwise it is ignored and `captureNote` says so.
+equals the key's own OAuth client id; the run is then `client` whatever the key's scopes.
+Otherwise it is ignored and `captureNote` says so.
 
 Changes are tagged within about 4 minutes (collection rules, SEO, menus and themes up to 10, from a
 10-minute check). After your last write, poll `GET /runs/:id` about every 20 s until
@@ -119,7 +121,7 @@ is still queued or running returns that job. The dry run plans the newest 50 cha
   `--quiet` prints only ids.
 - `lvndr guard -- <command...>` starts a run with a restore point, runs the command with
   `LVNDR_RUN_ID` set, ends the run, polls the run until it is attributed (`--wait`, default
-  120 s), lists its changes and prints the undo preview line.
+  300 s), lists its changes and prints the undo preview line.
   Its report goes to stderr; the command's own stdout is untouched; it exits with the
   command's exit code.
 - Time flags take `30m`, `24h`, `7d`, `2w` or an ISO timestamp.
@@ -131,7 +133,7 @@ is still queued or running returns that job. The dry run plans the newest 50 cha
 | 0 | OK (an undo preview is OK) |
 | 1 | Usage error (including `--run` without `--plan-hash`), bad parameter, or server error |
 | 2 | Undo, batch undo, run undo or rollback was partial or failed |
-| 3 | Auth: 401 (key), 403 (scope or app not installed) |
+| 3 | Auth: no key, 401 (missing, revoked or expired key), 403 (`insufficient_scope` or `not_installed`) |
 | 4 | Not found |
 | 5 | Rate limited after retries |
 | 6 | Network: could not reach the app |

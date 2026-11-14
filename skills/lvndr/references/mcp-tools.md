@@ -31,7 +31,7 @@ parentheses).
 | `lvndr_preview_undo_run` | Plan for undoing every change tagged with a run (the newest 50 planned). Returns the token for `lvndr_undo_run` | `id`, `reason`, `runId` (your current run, not the one being undone) |
 | `lvndr_preview_undo_batch` | Plan for undoing one actor's batch. Returns the token for `lvndr_undo_batch` | `anchorChangeId`, `reason`, `runId` |
 | `lvndr_preview_rollback` | What rolling back to a restore point would undo. Returns the token for `lvndr_rollback` | `pointId` |
-| `lvndr_list_alerts` | Anomaly alerts (bursts by one actor) | `status` (open, dismissed, all), `limit` |
+| `lvndr_list_alerts` | Anomaly alerts (bursts by one actor; `all` also lists alerts resolved by an undo) | `status` (open, dismissed, all), `limit` |
 | `lvndr_get_run` | One agent run with the changes tagged to it, plus `attributedThrough` and `pendingDeliveries` (how far lvndr has caught up) | `id`, `limit`, `cursor` |
 | `lvndr_list_runs` | Recent agent runs | `limit`, `openOnly` |
 | `lvndr_get_job` | Progress of a background undo job (from `lvndr_undo_run`, `lvndr_undo_batch` or `lvndr_rollback`): status (queued, running, done, partial, failed), total, done, failed, skipped, remaining, error, one result per change | `id` (the job id) |
@@ -50,7 +50,9 @@ parentheses).
 | `lvndr_dismiss_alert` | read | Dismiss an alert after the user has looked at it | `id` |
 
 Every store write needs the `confirmation_token` from its preview: 10 minutes, single use, bound
-to the key, the target and what the preview saw. There is no `confirm` or `dryRun` shortcut.
+to the key, the target and what the preview saw. There is no `confirm` or `dryRun` shortcut. A
+preview with nothing to write (no `ready` field, counting `conflict` fields only with
+`includeConflicts`, or no change to undo) returns `confirmation_token: null`.
 
 ## Run capture
 
@@ -58,7 +60,8 @@ to the key, the target and what the preview saw. There is no `confirm` or `dryRu
 
 - `all-unattributed`: the key has `undo`; while the run is open (up to 24 hours) it takes every
   change Shopify leaves unattributed or only inferred, staff edits included. End it promptly.
-- `client`: an OAuth token without `undo`; only changes linked to its own OAuth client.
+- `client`: an OAuth token without `undo`, or a `clientId` that is the token's own OAuth client
+  id; only changes linked to that OAuth client.
 - `none`: a Settings key without `undo`; nothing is tagged. Review with `lvndr_search_changes`
   by `since` instead.
 

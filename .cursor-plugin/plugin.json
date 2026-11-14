@@ -1,6 +1,6 @@
 {
   "name": "lvndr",
-  "description": "Store time machine for Shopify: every change to a store, who made it, and a precise undo. MCP tools, the safe-change skill and a rule.",
+  "description": "Store time machine for Shopify: what changed in a store, who made it as far as Shopify says, and a precise undo. MCP tools, the safe-change skill and a rule.",
   "version": "0.1.0",
   "author": {
     "name": "HereNow Labs"

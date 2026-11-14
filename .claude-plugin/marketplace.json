@@ -10,7 +10,7 @@
     {
       "name": "lvndr",
       "source": "./",
-      "description": "Every change to a Shopify store, who made it, and a precise undo. MCP tools plus the safe-change skill."
+      "description": "What changed in a Shopify store, who made it as far as Shopify says, and a precise undo. MCP tools plus the safe-change skill."
     }
   ]
 }

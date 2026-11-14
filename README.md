@@ -5,9 +5,10 @@ Everything an AI agent needs to change a Shopify store safely with
 the MCP server connection, the `lvndr` skill, plugins for Claude Code, Cursor and Codex, a Cursor
 rule, the MCP registry entry and the zero-dependency `lvndr` CLI.
 
-lvndr records every change to a store (products, variants, inventory, collections, pages, blogs and
-posts, media, publication, metafields and definitions, menus, themes), says who made it, and puts
-any of it back with a preview first. An agent starts a **run** with a restore point before it
+lvndr records changes to the parts of a store it tracks (products, variants, inventory,
+collections, pages, blogs and posts, media, publication, metafields and definitions, menus,
+themes), says who made each one as far as Shopify reveals it, and puts it back with a preview
+first. Themes are tracked but not written back; orders and customers are not tracked. An agent starts a **run** with a restore point before it
 writes; afterwards it lists exactly what the run changed and undoes the whole run, one batch or one
 field. The lvndr Shopify app must be installed on the store. This repository holds no app source.
 
