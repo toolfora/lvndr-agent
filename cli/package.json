@@ -24,14 +24,14 @@
     "mcp",
     "cli"
   ],
-  "homepage": "https://github.com/kasazen/lvndr-agent/tree/main/cli#readme",
+  "homepage": "https://github.com/toolfora/lvndr-agent/tree/main/cli#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kasazen/lvndr-agent.git",
+    "url": "git+https://github.com/toolfora/lvndr-agent.git",
     "directory": "cli"
   },
   "bugs": {
-    "url": "https://github.com/kasazen/lvndr-agent/issues"
+    "url": "https://github.com/toolfora/lvndr-agent/issues"
   },
   "author": "Toolfora (HereNow Labs, Inc.)",
   "license": "MIT"

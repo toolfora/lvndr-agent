@@ -1,6 +1,6 @@
 # LVNDR CLI
 
-The command line for [lvndr](https://github.com/kasazen/lvndr-agent), the store time machine for
+The command line for [lvndr](https://github.com/toolfora/lvndr-agent), the store time machine for
 Shopify: the change log, undo by change, batch or run, restore points and rollback, anomaly
 alerts and agent runs. One file, no dependencies, Node 20 or newer. It talks to the LVNDR REST API
 (`/api/v1`) with an API key.
@@ -12,7 +12,7 @@ npx lvndr status          # run without installing
 npm i -g lvndr            # or install the `lvndr` command
 ```
 
-From a checkout of [kasazen/lvndr-agent](https://github.com/kasazen/lvndr-agent): `node cli/lvndr.mjs <command>`
+From a checkout of [toolfora/lvndr-agent](https://github.com/toolfora/lvndr-agent): `node cli/lvndr.mjs <command>`
 (in the LVNDR app repository the same file is `agent-kit/cli/lvndr.mjs`).
 
 ## Log in

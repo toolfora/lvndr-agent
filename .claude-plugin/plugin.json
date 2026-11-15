@@ -5,10 +5,10 @@
   "description": "Store time machine for Shopify: what changed in a store, who made it as far as Shopify says, and a precise undo. Mark a restore point before changing a store with any tool, verify what changed, undo by change, run or restore point.",
   "author": {
     "name": "Toolfora (HereNow Labs, Inc.)",
-    "url": "https://github.com/kasazen"
+    "url": "https://toolfora.com"
   },
   "homepage": "https://lvndr.toolfora.com/developers",
-  "repository": "https://github.com/kasazen/lvndr-agent",
+  "repository": "https://github.com/toolfora/lvndr-agent",
   "license": "MIT",
   "keywords": [
     "shopify",

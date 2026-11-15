@@ -44,7 +44,7 @@ and undo; rollback and export are opt-in per key.
 Plugin (MCP server + skill; signs in with OAuth on first use):
 
 ```
-/plugin marketplace add kasazen/lvndr-agent
+/plugin marketplace add toolfora/lvndr-agent
 /plugin install lvndr@lvndr
 ```
 
@@ -100,7 +100,7 @@ bearer_token_env_var = "LVNDR_API_KEY"
 ```
 
 [`.codex-plugin/plugin.json`](.codex-plugin/plugin.json) packages the skill and points at
-[`.mcp.json`](.mcp.json), the URL-only server (`codex plugin marketplace add kasazen/lvndr-agent`).
+[`.mcp.json`](.mcp.json), the URL-only server (`codex plugin marketplace add toolfora/lvndr-agent`).
 If your Codex build does not do MCP OAuth, use the `config.toml` snippet above with a key.
 
 ## Claude Desktop
@@ -137,13 +137,13 @@ Every command, flag and exit code: [`cli/README.md`](cli/README.md).
 
 The skill follows the [Agent Skills](https://agentskills.io/specification) format. Copy
 [`skills/lvndr/`](skills/lvndr/SKILL.md) into your agent's skills directory (for Claude Code,
-`~/.claude/skills/lvndr/`), or `npx skills add kasazen/lvndr-agent`. Endpoint and tool reference:
+`~/.claude/skills/lvndr/`), or `npx skills add toolfora/lvndr-agent`. Endpoint and tool reference:
 [`skills/lvndr/references/`](skills/lvndr/references/).
 
 ## MCP registry
 
 [`server.json`](server.json) describes the remote server for the official MCP registry as
-`io.github.kasazen/lvndr-agent`.
+`io.github.toolfora/lvndr-agent`.
 
 ## Layout
 
