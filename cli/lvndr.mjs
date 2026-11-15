@@ -490,6 +490,8 @@ function previewLines(r) {
     if (listed.has(c.changeId)) continue;
     out.push(`  ${pad(c.outcome ?? "", 12)} ${typeOf(c.resourceType)} ${c.resourceTitle ?? c.resourceId ?? ""}: ${c.detail ?? ""}  (change ${c.changeId})`);
   }
+  // What the undo also repairs (stock, links and redirects after a rebuild; a redirect turned around).
+  for (const repair of r.plan?.repairs ?? []) out.push(`  also         ${repair.label}`);
   if (p.counts && "planned" in p.counts) out.push(`${p.counts.planned} change(s) to undo, ${p.counts.skipped ?? 0} skipped`);
   if (p.outcomes) out.push(`${p.outcomes.restore ?? 0} change(s) to undo, ${(p.outcomes["already-back"] ?? 0) + (p.outcomes.conflict ?? 0) + (p.outcomes.unsupported ?? 0)} left alone${p.outcomes.error ? `, ${p.outcomes.error} could not be read` : ""}`);
   if (typeof p.more === "number" && p.more > 0) out.push(`${p.more} more change(s) not planned in this preview (of ${p.total ?? "?"}); the undo covers them too`);
@@ -571,6 +573,7 @@ const firstArray = (r, keys) => {
 export const USAGE = Object.freeze({
   me: "me",
   status: "status",
+  coverage: "coverage",
   changes: "changes [--since 24h] [--until ISO] [--type PRODUCT] [--action update] [--resource-id Product-1] [--actor name] [--q text] [--hide-undos] [--run-id id] [--limit 50] [--cursor c]",
   change: "change <id>",
   history: "history <gid|Type-digits> [--cursor c]",
@@ -599,6 +602,7 @@ export const USAGE = Object.freeze({
 const DETAIL = {
   me: "Which shop and key this is, with the key's scopes and the plan.",
   status: "Plan, tracked record counts, the last activity check and pending deliveries.",
+  coverage: "What LVNDR tracks and can undo in this store, per record type, with the types that need a permission (and which Shopify scopes to grant in the app), translations and kept media originals.",
   changes: "Changes, newest first. --since/--until take 30m, 24h, 7d, 2w or an ISO time. Pages with --cursor.",
   change: "One change with its full before/after diff and attribution.",
   history: "Every stored version and change of one record (gid://shopify/Product/1 or Product-1).",
@@ -645,6 +649,7 @@ Usage: lvndr <command> [options]       lvndr <command> --help for one command
 Read
   me                                   which shop and key this is
   status                               plan, tracked counts, last activity check
+  coverage                             what is tracked and undoable; types that need a permission
   changes [--since 24h] [--until ISO] [--type PRODUCT] [--action update] [--resource-id Product-1]
           [--actor name] [--q text] [--hide-undos] [--run-id id] [--limit 50] [--cursor c]
   change <id>                          one change with its diff
@@ -926,6 +931,16 @@ async function dispatch(parsed, io) {
           `last activity check: ${s.lastPolledAt ? when(s.lastPolledAt) : "never"}  pending deliveries: ${s.deliveries?.pending ?? "?"}`,
         ],
       };
+    }
+    case "coverage": {
+      // A type that needs a permission is a status line, never a failure (exit 0).
+      const r = await request(ctx, "GET", "/coverage");
+      const word = { tracked: "tracked", read_only: "tracked, undo needs permission", needs_permission: "needs permission" };
+      const human = (r.types ?? []).map((t) => `${String(t.label ?? t.type).padEnd(22)} ${word[t.status] ?? t.status}${t.undo && t.status === "tracked" ? `  undo: ${t.undo}` : ""}${t.missingScopes?.length ? `  (${t.missingScopes.join(", ")})` : ""}`);
+      if (r.translations) human.push(`${"Translations".padEnd(22)} ${word[r.translations.status] ?? r.translations.status}${r.translations.missingScopes?.length ? `  (${r.translations.missingScopes.join(", ")})` : ""}`);
+      if (r.mediaOriginals) human.push(`${"Media originals".padEnd(22)} ${r.mediaOriginals.status}${r.mediaOriginals.files ? `  ${r.mediaOriginals.files} file${r.mediaOriginals.files === 1 ? "" : "s"} kept` : ""}`);
+      const notes = r.missingScopes?.length ? [`To grant: open LVNDR in the Shopify admin, Settings > Tracking coverage (${r.missingScopes.join(", ")}).`] : [];
+      return { result: r, human, notes };
     }
     case "changes": {
       const query = {

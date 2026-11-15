@@ -22,7 +22,8 @@ parentheses).
 | Tool | Use it to | Main arguments |
 |---|---|---|
 | `lvndr_status` | Check the key works; plan, tracked counts, last activity check | none |
-| `lvndr_search_changes` | List changes, newest first | `since`, `until` (ISO date-time or how long ago: 30m, 24h, 7d, 2w), `type` (PRODUCT, COLLECTION, PAGE, BLOG, ARTICLE, MENU, THEME, METAFIELD_DEFINITION; any case), `action`, `resourceId` (gid or Product-123), `actor`, `q`, `hideUndos`, `runId`, `limit`, `cursor` |
+| `lvndr_coverage` | What is tracked and undoable per record type (`tracked`, `read_only`, `needs_permission`), translations, kept media originals, and the scopes still to grant | none |
+| `lvndr_search_changes` | List changes, newest first | `since`, `until` (ISO date-time or how long ago: 30m, 24h, 7d, 2w), `type` (PRODUCT, COLLECTION, PAGE, BLOG, ARTICLE, MENU, THEME, METAFIELD_DEFINITION, REDIRECT, DISCOUNT; any case), `action`, `resourceId` (gid or Product-123), `actor`, `q`, `hideUndos`, `runId`, `limit`, `cursor` |
 | `lvndr_get_change` | One change with its full before/after diff and attribution tier | `id` |
 | `lvndr_record_history` | Every stored version and change of one record | `resourceId` (gid or Product-123), `cursor` |
 | `lvndr_get_batch` | Everything one actor did around a change (no gap over 10 minutes) | `anchorChangeId` (any change in the batch) |
