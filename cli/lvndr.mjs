@@ -43,15 +43,15 @@ export class CliError extends Error {
 
 const BOOLEAN_FLAGS = new Set([
   "json", "ndjson", "quiet", "help", "version", "run", "yes", "include-conflicts", "confirm", "all",
-  "no-restore-point", "hide-undos", "no-verify", "no-retry", "with-token",
+  "no-restore-point", "hide-undos", "no-verify", "no-retry", "with-token", "apply", "reject",
 ]);
 const VALUE_FLAGS = new Set([
   "key", "url", "profile", "agent", "run-id", "reason", "task", "client-id", "format", "since", "until",
   "out", "limit", "cursor", "type", "action", "resource-id", "actor", "q", "status", "wait", "timeout",
-  "plan-hash", "kind", "field", "only", "exclude",
+  "plan-hash", "kind", "field", "only", "exclude", "at", "item", "title", "note",
 ]);
 /** Value flags that may be given more than once; they collect into an array. */
-const REPEATABLE_FLAGS = new Set(["field", "only", "exclude"]);
+const REPEATABLE_FLAGS = new Set(["field", "only", "exclude", "item"]);
 const SHORT_FLAGS = { h: "help", q: "quiet", v: "version" };
 
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -158,6 +158,16 @@ export function toGid(ref) {
   if (!m) throw new CliError(`not a record id: ${ref} (use gid://shopify/Product/123 or Product-123)`);
   const type = m[1].split("_").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("");
   return `gid://shopify/${type}/${m[2]}`;
+}
+
+/** --at for a scheduled undo: "+2h", "+3d", "+1w" from now, or an ISO time with a zone -> ISO. */
+export function toFutureIso(value, now = Date.now()) {
+  if (value === undefined || value === "") throw new CliError("--at is required: +2h, +3d or an ISO time such as 2026-11-17T09:00:00-05:00");
+  const m = /^\+(\d+)([mhdw])$/.exec(value);
+  if (m) return new Date(now + Number(m[1]) * { m: 6e4, h: 3.6e6, d: 8.64e7, w: 6.048e8 }[m[2]]).toISOString();
+  const t = Date.parse(value);
+  if (Number.isNaN(t)) throw new CliError(`--at takes +2h, +3d, +1w or an ISO time, not ${value}`);
+  return new Date(t).toISOString();
 }
 
 /** --limit: a whole number from 1 to 100, refused otherwise (never silently changed). */
@@ -535,7 +545,8 @@ async function confirm(question, io) {
  *   --yes                   a person at a terminal: preview, print it once, ask, then write it
  * A preview with nothing to write says "Nothing to undo" and prints no write command.
  */
-async function writeFlow({ flags, io, preview, write, previewCommand, runCommand, extra = () => [] }) {
+async function writeFlow({ flags, io, preview, write, previewCommand, runCommand, extra = () => [], render = previewLines }) {
+  const previewLines = render;
   if (flags.yes) {
     if (!(io.stdin ?? process.stdin).isTTY) {
       throw new CliError(`--yes is for a person at a terminal. Preview with \`${previewCommand}\`, show the plan, then pass the --plan-hash it prints.`);
@@ -563,6 +574,34 @@ const firstArray = (r, keys) => {
   for (const k of keys) if (Array.isArray(r?.[k])) return r[k];
   return null;
 };
+
+/** A proposal reviewed against the live store: per record, each field now -> proposed. */
+const PROPOSAL_WORD = { ready: "will apply", conflict: "changed since", noop: "already so", unsupported: "can't write" };
+function proposalLines(r) {
+  const p = r.proposal ?? {};
+  const out = [`${p.title ?? "proposal"}  [${p.status ?? "?"}]  from ${p.source?.name ?? "?"}  (${p.id ?? ""})`];
+  let last = null;
+  for (const i of r.items ?? []) {
+    if (i.resourceId !== last) {
+      out.push(`${typeOf(i.resourceType)} ${i.title ?? i.resourceId ?? ""}`);
+      last = i.resourceId;
+    }
+    const done = i.itemStatus && i.itemStatus !== "pending" ? `  [${i.itemStatus}]` : "";
+    out.push(`  ${pad(PROPOSAL_WORD[i.status] ?? i.status, 13)} ${i.field}: ${showValue(i.current)} -> ${showValue(i.target)}${i.changedSince ? `  (was ${showValue(i.seen)} when proposed)` : ""}${done}  (item ${i.id})`);
+  }
+  return out;
+}
+
+/** A restore-to-version preview: each differing field, now -> as it was in that version. */
+function restoreLines(r) {
+  const v = r.version ?? {};
+  const out = [`restore to version ${v.version ?? "?"} (saved ${v.capturedAt ? when(v.capturedAt) : "?"}${v.sourceLabel ? `, ${v.sourceLabel}` : ""})`];
+  for (const i of r.items ?? []) out.push(`  ${pad(i.status === "ready" ? "will restore" : "can't restore", 13)} ${i.field}: ${showValue(i.current)} -> ${showValue(i.target)}${i.reason ? `  (${i.reason})` : ""}`);
+  if (!(r.items ?? []).length) out.push("  the record already matches this version");
+  return out;
+}
+
+const SCHEDULE_KINDS = ["change", "run", "batch", "rollback"];
 
 // ---------------------------------------------------------------------------------------------
 // Commands
@@ -593,6 +632,14 @@ export const USAGE = Object.freeze({
   "run undo": "run undo [id] [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  run undo [id] --run --plan-hash <h> [--only <kind>]...  |  run undo [id] --yes",
   guard: "guard [--agent name] [--task text] [--wait 300] -- <command...>",
   login: "login [--key lv_... | --with-token] [--url URL] [--profile name] [--no-verify]",
+  propose: "propose <file.json | -> [--title text] [--note text]",
+  proposals: "proposals [--status open|applied|partly-applied|rejected|expired|all] [--limit 50]",
+  proposal: "proposal <id>  |  proposal <id> --apply --plan-hash <h> [--item <itemId>]... [--only <kind>]... [--include-conflicts]  |  proposal <id> --reject [--reason text]",
+  compare: "compare <gid|Type-digits> <fromVersion> <toVersion>",
+  "restore-version": "restore-version <gid|Type-digits> <version> [--field <path>]...  |  restore-version <record> <version> --run --plan-hash <h> [--field <path>]...  |  restore-version <record> <version> --yes",
+  schedule: "schedule change|run|batch|rollback <id> --at <+2h|+3d|ISO> [--field <path>]... [--only <kind>]... [--exclude <changeId>]... [--include-conflicts]  |  schedule <kind> <id> --at <when> --plan-hash <h> [same narrowing]",
+  scheduled: "scheduled [--all | --status scheduled|done|skipped|failed|cancelled] [--limit 50]",
+  unschedule: "unschedule <scheduledUndoId>",
 });
 
 /** What each command does, shown under its usage by `lvndr <command> --help`. */
@@ -626,6 +673,18 @@ const DETAIL = {
   guard:
     "Check the command exists, start a run (with a restore point), run the command with LVNDR_RUN_ID set, end the run, then poll the run every 20 s for up to --wait seconds (default 300) until attribution has caught up, printing the changes tagged so far and what it still waits for; then the changes and the undo line. --wait 0 skips waiting.",
   login: "Save a profile (URL and key) to ~/.config/lvndr/config.json after checking the key. Without --key it asks for the key without echoing it; --with-token reads it from stdin (lvndr login --with-token < key.txt).",
+  propose:
+    "Propose field edits for the merchant to review in LVNDR instead of writing them (needs only Read). The file holds { \"title\", \"note\", \"records\": [{ \"resourceId\": \"Product-1\", \"changes\": { \"<field path>\": value } }] } or just the records list; - reads stdin. Paths are the ones undo previews list (title, variants[ProductVariant/1].price).",
+  proposals: "Proposals on the store: open and partly applied by default; --status all lists every one.",
+  proposal:
+    "Without flags: the proposal compared with the live store, field by field, and the line that applies exactly that.\n--apply --plan-hash <h>: apply it (needs a key with Apply proposals; the merchant can always apply in LVNDR > Review). --item <itemId> (repeatable) and --only <kind> apply part of it.\n--reject: reject it (the key that proposed it may withdraw it).",
+  compare: "What differs between two stored versions of a record (version numbers from `lvndr history`).",
+  "restore-version":
+    "Without flags: preview putting a record back to an earlier version (each differing field) and print the line that runs exactly that.\n--field <path> (repeatable): restore only those fields.\n--run --plan-hash <h>: write it; refused (exit 7) if the record moved since.\n--yes: for a person at a terminal: preview, ask, then restore.",
+  schedule:
+    "Run an undo later. Without --plan-hash: preview it and print the schedule line bound to that plan. With --plan-hash: schedule it. At the set time LVNDR previews again and runs it only if nothing moved; otherwise it is skipped with the reason. --at takes +2h, +3d, +1w or an ISO time with a zone.",
+  scheduled: "Scheduled undos: upcoming by default; --all also lists the ones that ran, were skipped or cancelled.",
+  unschedule: "Cancel a scheduled undo before it runs.",
 };
 
 /** Help for one command ("undo", "run undo", or "run" for all run subcommands), or null. */
@@ -672,6 +731,18 @@ Write (every write is bound to the plan its preview printed)
                                        undo-batch, run undo and rollback queue a job and wait for it
   guard [--agent name] [--task text] [--wait 300] -- <command...>
                                        run + restore point around a command, then the undo line
+
+Review and time
+  propose <file.json>                  propose field edits for the merchant to review (needs Read)
+  proposals [--status all]             proposals on the store
+  proposal <id> [--apply --plan-hash <h> | --reject]
+                                       one proposal against the live store; apply needs Apply proposals
+  compare <record> <from> <to>         what differs between two versions of a record
+  restore-version <record> <version> [--run --plan-hash <h>]
+                                       put a record back to an earlier version
+  schedule <kind> <id> --at +3d [--plan-hash <h>]
+                                       undo a change, run, batch or rollback later
+  scheduled [--all] | unschedule <id>  scheduled undos
 
 Setup
   login [--key lv_... | --with-token] [--url URL] [--profile name] [--no-verify]
@@ -1155,6 +1226,128 @@ async function dispatch(parsed, io) {
       }
       const hint = sub ? suggestCommand(sub, ["start", "end", "show", "list", "undo"]) : null;
       throw new CliError(`${sub ? `unknown run command: ${sub}${hint ? ` (did you mean \`lvndr run ${hint}\`?)` : ""}` : "usage: lvndr run start|end|show|list|undo"}\n\n${commandHelp("run")}`);
+    }
+    case "propose": {
+      need(args, 1, USAGE.propose);
+      let raw;
+      try {
+        raw = args[0] === "-" ? await readAll(io.stdin ?? process.stdin) : readFileSync(args[0], "utf8");
+      } catch (e) {
+        throw new CliError(`cannot read ${args[0]}: ${e?.message ?? e}`);
+      }
+      let parsedFile;
+      try {
+        parsedFile = JSON.parse(raw);
+      } catch {
+        throw new CliError(`${args[0]} is not valid JSON`);
+      }
+      const doc = Array.isArray(parsedFile) ? { records: parsedFile } : parsedFile ?? {};
+      const body = { records: doc.records, title: flags.title ?? doc.title, note: flags.note ?? doc.note };
+      const r = await request(ctx, "POST", "/proposals", { body });
+      const p = r.proposal ?? {};
+      const human = [`proposed ${p.id}: ${p.fields ?? "?"} field(s) on ${p.records ?? "?"} record(s)  [${p.status}]`, ...(r.items ?? []).map((i) => `  ${i.field}: -> ${showValue(i.target)}  (${typeOf(i.record?.type)} ${i.record?.title ?? i.record?.id ?? ""})`)];
+      const notes = [`The merchant reviews it in LVNDR > Review. Check it with: lvndr proposal ${p.id}`];
+      return { result: r, human, notes, quietIds: [p.id] };
+    }
+    case "proposals": {
+      const r = await request(ctx, "GET", "/proposals", { query: { status: flags.all ? "all" : flags.status, limit: parseLimit(flags.limit) } });
+      const list = r.proposals ?? [];
+      const human = table([["ID", 26], ["CREATED", 26], ["STATUS", 14], ["FROM", 24], ["FIELDS", 6], ["TITLE", 0]], list.map((p) => [p.id, when(p.createdAt), p.status, p.source?.name ?? "", p.fields ?? "", p.title ?? ""]));
+      if (!list.length) human.push("no proposals");
+      return { result: r, human, list, quietIds: list.map((p) => p.id) };
+    }
+    case "proposal": {
+      need(args, 1, USAGE.proposal);
+      const path = `/proposals/${enc(args[0])}`;
+      if (flags.reject) {
+        const r = await request(ctx, "POST", `${path}/reject`, { body: { reason: flags.reason } });
+        return { result: r, human: [`rejected ${r.proposal?.id ?? args[0]}; nothing was written to the store`], quietIds: [r.proposal?.id] };
+      }
+      if (flags.apply) {
+        if (!flags.planHash) throw new CliError(`review first: lvndr proposal ${args[0]} (it prints the --plan-hash to pass)`);
+        const body = { planHash: flags.planHash, itemIds: flags.item?.length ? flags.item : undefined, fieldKinds: flags.only?.length ? flags.only : undefined, includeConflicts: flags.includeConflicts ? true : undefined, reason: flags.reason };
+        const r = await request(ctx, "POST", `${path}/apply`, { body });
+        const human = [`${r.proposal?.status ?? "applied"}: ${r.proposal?.title ?? args[0]}`];
+        for (const rec of r.records ?? []) human.push(...runLines({ id: rec.undoRunId, status: rec.status, ops: rec.ops }).map((l) => `  ${rec.resourceId}: ${l}`));
+        if (r.runId) human.push(`To take the whole proposal back: lvndr run undo ${r.runId}`);
+        const failed = (r.records ?? []).some((x) => x.status !== "done" && x.status !== "noop");
+        return { result: r, human, quietIds: [r.runId], exitCode: failed ? EXIT.UNDO_FAILED : EXIT.OK };
+      }
+      const r = await request(ctx, "GET", path);
+      const human = proposalLines(r);
+      const open = ["open", "partly-applied"].includes(r.proposal?.status);
+      const ready = (r.items ?? []).filter((i) => i.status === "ready" && i.itemStatus !== "applied").length;
+      if (open && ready) human.push(`To apply exactly this (needs a key with Apply proposals; or apply in LVNDR > Review): lvndr proposal ${args[0]} --apply --plan-hash ${r.planHash}`);
+      else if (open) human.push("Nothing ready to apply.");
+      return { result: r, human };
+    }
+    case "compare": {
+      need(args, 3, USAGE.compare);
+      const r = await request(ctx, "GET", `/records/${enc(toGid(args[0]))}/compare`, { query: { from: args[1], to: args[2] } });
+      const human = [`version ${r.from?.version} (${when(r.from?.capturedAt)}) -> version ${r.to?.version} (${when(r.to?.capturedAt)})`];
+      if (r.deleted) human.push(`  the record is deleted in version ${r.deleted === "from" ? r.from?.version : r.to?.version}`);
+      for (const e of r.entries ?? []) human.push(`  ${e.field}: ${showValue(e.from)} -> ${showValue(e.to)}`);
+      if (!r.deleted && !(r.entries ?? []).length) human.push("  no differences");
+      human.push(`To put the record back to version ${r.from?.version}: lvndr restore-version ${args[0]} ${r.from?.version}`);
+      return { result: r, human };
+    }
+    case "restore-version": {
+      need(args, 2, USAGE["restore-version"]);
+      const path = `/records/${enc(toGid(args[0]))}/restore`;
+      const version = Number(args[1]);
+      if (!Number.isInteger(version) || version < 1) throw new CliError(`version must be a number from \`lvndr history ${args[0]}\`, not ${args[1]}`);
+      const fields = flags.field?.length ? flags.field : undefined;
+      const fieldArgs = (fields ?? []).map((f) => ` --field ${shellQuote(f)}`).join("");
+      return writeFlow({
+        flags,
+        io,
+        render: restoreLines,
+        preview: async () => {
+          const r = await request(ctx, "POST", path, { body: { version, dryRun: true, fields, reason: flags.reason } });
+          return { ...r, nothingToUndo: !!r.nothingToRestore };
+        },
+        write: async (planHash) => {
+          const r = await request(ctx, "POST", path, { body: { version, dryRun: false, fields, planHash, reason: flags.reason } });
+          return { result: r, human: runLines(r.run), quietIds: [r.run?.id], exitCode: undoFailed(r) ? EXIT.UNDO_FAILED : EXIT.OK };
+        },
+        previewCommand: `lvndr restore-version ${args[0]} ${version}${fieldArgs}`,
+        runCommand: `lvndr restore-version ${args[0]} ${version} --run${fieldArgs}`,
+      });
+    }
+    case "schedule": {
+      need(args, 2, USAGE.schedule);
+      const kind = args[0];
+      if (!SCHEDULE_KINDS.includes(kind)) throw new CliError(`usage: lvndr ${USAGE.schedule.split("  |  ")[0]}`);
+      const id = args[1];
+      const runAt = toFutureIso(flags.at);
+      const n = narrowing(flags);
+      const fields = flags.field?.length ? flags.field : undefined;
+      const includeConflicts = !!flags.includeConflicts;
+      const echo = `${kind === "change" ? (fields ?? []).map((f) => ` --field ${shellQuote(f)}`).join("") : n.echo}${includeConflicts ? " --include-conflicts" : ""}`;
+      if (flags.planHash) {
+        const body = { kind, targetId: id, runAt, planHash: flags.planHash, reason: flags.reason, ...(kind === "change" ? { fields, includeConflicts: includeConflicts || undefined } : n.body) };
+        const r = await request(ctx, "POST", "/scheduled-undos", { body });
+        const sch = r.scheduled ?? {};
+        return { result: r, human: [`scheduled ${sch.id} for ${when(sch.runAt)}: ${sch.label ?? `${kind} ${id}`}`, "At that time LVNDR previews it again and runs it only if nothing moved; otherwise it is skipped with the reason (lvndr scheduled --all)."], quietIds: [sch.id] };
+      }
+      let r;
+      if (kind === "change") r = await request(ctx, "POST", `/changes/${enc(id)}/undo`, { body: { dryRun: true, includeConflicts, fields } });
+      else if (kind === "rollback") r = await request(ctx, "GET", `/restore-points/${enc(id)}/preview`, { query: { kinds: flags.only?.join(","), exclude: flags.exclude?.join(",") } });
+      else r = await request(ctx, "POST", `/${kind === "run" ? "runs" : "batches"}/${enc(id)}/undo`, { body: { dryRun: true, ...n.body } });
+      if (nothingToUndo(r)) return { result: r, human: [...previewLines(r), "Nothing to undo, so nothing to schedule."] };
+      return { result: r, human: [...previewLines(r), "preview only; nothing was scheduled.", `To schedule exactly this plan: lvndr schedule ${kind} ${id} --at ${shellQuote(flags.at)}${echo} --plan-hash ${r.planHash}`] };
+    }
+    case "scheduled": {
+      const r = await request(ctx, "GET", "/scheduled-undos", { query: { status: flags.all ? "all" : flags.status, limit: parseLimit(flags.limit) } });
+      const list = r.scheduled ?? [];
+      const human = table([["ID", 26], ["RUNS AT", 26], ["STATUS", 10], ["WHAT", 0]], list.map((x) => [x.id, when(x.runAt), x.status, `${x.label ?? `${x.kind} ${x.targetId}`}${x.result?.message ? `  (${x.result.message})` : ""}`]));
+      if (!list.length) human.push(flags.all || flags.status ? "no scheduled undos" : "no undos scheduled (--all shows the ones that ran)");
+      return { result: r, human, list, quietIds: list.map((x) => x.id) };
+    }
+    case "unschedule": {
+      need(args, 1, USAGE.unschedule);
+      const r = await request(ctx, "POST", `/scheduled-undos/${enc(args[0])}/cancel`, { body: {} });
+      return { result: r, human: [`cancelled ${r.scheduled?.id ?? args[0]}: ${r.scheduled?.label ?? ""}`], quietIds: [r.scheduled?.id] };
     }
     case "export": {
       const text = await request(ctx, "GET", "/export", { raw: true, query: { format: flags.format, since: toIso(flags.since), until: toIso(flags.until) } });
