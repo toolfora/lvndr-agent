@@ -1,7 +1,7 @@
 # LVNDR agent kit
 
 Everything an AI agent needs to change a Shopify store safely with
-[lvndr](https://lvndr.toolfora.com/developers), the store time machine for Shopify:
+[LVNDR by Toolfora](https://toolfora.com/lvndr/developers), the store time machine for Shopify:
 the MCP server connection, the `lvndr` skill, plugins for Claude Code, Cursor and Codex, a Cursor
 rule, the MCP registry entry and the zero-dependency `lvndr` CLI.
 
@@ -12,8 +12,8 @@ first. Themes are tracked but not written back; orders and customers are not tra
 writes; afterwards it lists exactly what the run changed and undoes the whole run, one batch or one
 field. The LVNDR Shopify app must be installed on the store. This repository holds no app source.
 
-- Developer page: <https://lvndr.toolfora.com/developers>
-- For language models: <https://lvndr.toolfora.com/llms.txt>
+- Developer page: <https://toolfora.com/lvndr/developers>
+- For language models: <https://toolfora.com/lvndr/llms.txt>
 - OpenAPI: <https://lvndr.toolfora.com/api/v1/openapi.json>
 - Operator guide: [`docs/AGENT-PLAYBOOK.md`](docs/AGENT-PLAYBOOK.md)
 

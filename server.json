@@ -4,7 +4,7 @@
   "title": "LVNDR by Toolfora",
   "description": "Shopify store change log with attribution and precise undo, restore points and agent runs.",
   "version": "0.1.0",
-  "websiteUrl": "https://lvndr.toolfora.com/developers",
+  "websiteUrl": "https://toolfora.com/lvndr/developers",
   "repository": {
     "url": "https://github.com/toolfora/lvndr-agent",
     "source": "github"

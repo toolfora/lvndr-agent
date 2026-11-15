@@ -21,7 +21,7 @@ plus `VERSION` in `cli/lvndr.mjs` and `metadata.version` in `skills/lvndr/SKILL.
 ```sh
 gh repo create toolfora/lvndr-agent --public \
   --description "lvndr for AI agents: MCP server, skill, Claude Code/Cursor/Codex plugins and CLI" \
-  --homepage https://lvndr.toolfora.com/developers
+  --homepage https://toolfora.com/lvndr/developers
 ```
 
 ## 2. Push the folder

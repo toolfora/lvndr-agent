@@ -7,7 +7,7 @@
     "name": "Toolfora (HereNow Labs, Inc.)",
     "url": "https://toolfora.com"
   },
-  "homepage": "https://lvndr.toolfora.com/developers",
+  "homepage": "https://toolfora.com/lvndr/developers",
   "repository": "https://github.com/toolfora/lvndr-agent",
   "license": "MIT",
   "keywords": [
@@ -20,8 +20,8 @@
     "agents"
   ],
   "icon": "./assets/icon-512.png",
-  "documentationUrl": "https://lvndr.toolfora.com/developers",
-  "supportUrl": "https://lvndr.toolfora.com/support",
-  "privacyPolicyUrl": "https://lvndr.toolfora.com/privacy",
+  "documentationUrl": "https://toolfora.com/lvndr/developers",
+  "supportUrl": "https://toolfora.com/lvndr/support",
+  "privacyPolicyUrl": "https://toolfora.com/lvndr/privacy",
   "mcpServers": "./.mcp.json"
 }
