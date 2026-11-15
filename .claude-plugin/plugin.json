@@ -7,7 +7,7 @@
     "name": "HereNow Labs",
     "url": "https://github.com/kasazen"
   },
-  "homepage": "https://app-production-559c.up.railway.app/developers",
+  "homepage": "https://lvndr.toolfora.com/developers",
   "repository": "https://github.com/kasazen/lvndr-agent",
   "license": "MIT",
   "keywords": [
@@ -20,8 +20,8 @@
     "agents"
   ],
   "icon": "./assets/icon-512.png",
-  "documentationUrl": "https://app-production-559c.up.railway.app/developers",
-  "supportUrl": "https://app-production-559c.up.railway.app/support",
-  "privacyPolicyUrl": "https://app-production-559c.up.railway.app/privacy",
+  "documentationUrl": "https://lvndr.toolfora.com/developers",
+  "supportUrl": "https://lvndr.toolfora.com/support",
+  "privacyPolicyUrl": "https://lvndr.toolfora.com/privacy",
   "mcpServers": "./.mcp.json"
 }

@@ -17,7 +17,7 @@ of it back (themes are tracked but never written; see Limits).
 
 You reach it two ways. Prefer MCP when the `lvndr_*` tools are available; otherwise use the CLI.
 
-- MCP: server `lvndr` at `https://app-production-559c.up.railway.app/mcp` (OAuth sign-in, or bearer
+- MCP: server `lvndr` at `https://lvndr.toolfora.com/mcp` (OAuth sign-in, or bearer
   `LVNDR_API_KEY`).
 - CLI: `npx lvndr <command>` (or `lvndr` if installed), key from `LVNDR_API_KEY` or `lvndr login`.
   Add `--json` to any command for machine-readable output.

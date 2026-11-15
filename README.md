@@ -1,7 +1,7 @@
 # lvndr agent kit
 
 Everything an AI agent needs to change a Shopify store safely with
-[lvndr](https://app-production-559c.up.railway.app/developers), the store time machine for Shopify:
+[lvndr](https://lvndr.toolfora.com/developers), the store time machine for Shopify:
 the MCP server connection, the `lvndr` skill, plugins for Claude Code, Cursor and Codex, a Cursor
 rule, the MCP registry entry and the zero-dependency `lvndr` CLI.
 
@@ -12,9 +12,9 @@ first. Themes are tracked but not written back; orders and customers are not tra
 writes; afterwards it lists exactly what the run changed and undoes the whole run, one batch or one
 field. The lvndr Shopify app must be installed on the store. This repository holds no app source.
 
-- Developer page: <https://app-production-559c.up.railway.app/developers>
-- For language models: <https://app-production-559c.up.railway.app/llms.txt>
-- OpenAPI: <https://app-production-559c.up.railway.app/api/v1/openapi.json>
+- Developer page: <https://lvndr.toolfora.com/developers>
+- For language models: <https://lvndr.toolfora.com/llms.txt>
+- OpenAPI: <https://lvndr.toolfora.com/api/v1/openapi.json>
 - Operator guide: [`docs/AGENT-PLAYBOOK.md`](docs/AGENT-PLAYBOOK.md)
 
 ## Step 0: install lvndr on the store
@@ -25,7 +25,7 @@ shows the progress; a few minutes for most catalogues). Then connect your agent 
 
 ## Connect
 
-MCP endpoint: `https://app-production-559c.up.railway.app/mcp` (Streamable HTTP).
+MCP endpoint: `https://lvndr.toolfora.com/mcp` (Streamable HTTP).
 
 The first option for every client is keyless: give it only the URL, and it signs in through the
 Shopify admin with OAuth (you pick the store and approve the scopes). The second option is an API
@@ -51,13 +51,13 @@ Plugin (MCP server + skill; signs in with OAuth on first use):
 Or the MCP server alone, keyless (then run `/mcp` in Claude Code to sign in):
 
 ```sh
-claude mcp add -t http lvndr https://app-production-559c.up.railway.app/mcp
+claude mcp add -t http lvndr https://lvndr.toolfora.com/mcp
 ```
 
 With an API key instead:
 
 ```sh
-claude mcp add -t http -H "Authorization: Bearer $LVNDR_API_KEY" lvndr https://app-production-559c.up.railway.app/mcp
+claude mcp add -t http -H "Authorization: Bearer $LVNDR_API_KEY" lvndr https://lvndr.toolfora.com/mcp
 ```
 
 ## Cursor
@@ -66,27 +66,27 @@ Keyless: add the URL to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project
 with OAuth when the server is first used:
 
 ```json
-{ "mcpServers": { "lvndr": { "url": "https://app-production-559c.up.railway.app/mcp" } } }
+{ "mcpServers": { "lvndr": { "url": "https://lvndr.toolfora.com/mcp" } } }
 ```
 
 With an API key, one-click install (Cursor reads `LVNDR_API_KEY` from its environment):
 
 ```
-cursor://anysphere.cursor-deeplink/mcp/install?name=lvndr&config=eyJ1cmwiOiJodHRwczovL2FwcC1wcm9kdWN0aW9uLTU1OWMudXAucmFpbHdheS5hcHAvbWNwIiwiaGVhZGVycyI6eyJBdXRob3JpemF0aW9uIjoiQmVhcmVyICR7ZW52OkxWTkRSX0FQSV9LRVl9In19
+cursor://anysphere.cursor-deeplink/mcp/install?name=lvndr&config=eyJ1cmwiOiJodHRwczovL2x2bmRyLnRvb2xmb3JhLmNvbS9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiJCZWFyZXIgJHtlbnY6TFZORFJfQVBJX0tFWX0ifX0=
 ```
 
 The `config` value is the base64 of
-`{"url":"https://app-production-559c.up.railway.app/mcp","headers":{"Authorization":"Bearer ${env:LVNDR_API_KEY}"}}`.
+`{"url":"https://lvndr.toolfora.com/mcp","headers":{"Authorization":"Bearer ${env:LVNDR_API_KEY}"}}`.
 The Cursor plugin in [`.cursor-plugin/`](.cursor-plugin/plugin.json) bundles the URL-only server
 (OAuth), the skill and the rule in [`rules/lvndr.mdc`](rules/lvndr.mdc).
 
 ## VS Code
 
 ```
-vscode:mcp/install?%7B%22name%22%3A%22lvndr%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fapp-production-559c.up.railway.app%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20%24%7Benv%3ALVNDR_API_KEY%7D%22%7D%7D
+vscode:mcp/install?%7B%22name%22%3A%22lvndr%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Flvndr.toolfora.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22Bearer%20%24%7Benv%3ALVNDR_API_KEY%7D%22%7D%7D
 ```
 
-As a web link: [Install in VS Code](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522lvndr%2522%252C%2522type%2522%253A%2522http%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fapp-production-559c.up.railway.app%252Fmcp%2522%252C%2522headers%2522%253A%257B%2522Authorization%2522%253A%2522Bearer%2520%2524%257Benv%253ALVNDR_API_KEY%257D%2522%257D%257D).
+As a web link: [Install in VS Code](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522lvndr%2522%252C%2522type%2522%253A%2522http%2522%252C%2522url%2522%253A%2522https%253A%252F%252Flvndr.toolfora.com%252Fmcp%2522%252C%2522headers%2522%253A%257B%2522Authorization%2522%253A%2522Bearer%2520%2524%257Benv%253ALVNDR_API_KEY%257D%2522%257D%257D).
 VS Code must be started from a shell where `LVNDR_API_KEY` is set.
 
 ## Codex
@@ -95,7 +95,7 @@ In `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.lvndr]
-url = "https://app-production-559c.up.railway.app/mcp"
+url = "https://lvndr.toolfora.com/mcp"
 bearer_token_env_var = "LVNDR_API_KEY"
 ```
 
@@ -113,7 +113,7 @@ Through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote), in
   "mcpServers": {
     "lvndr": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://app-production-559c.up.railway.app/mcp", "--header", "Authorization:${LVNDR_AUTH}"],
+      "args": ["-y", "mcp-remote", "https://lvndr.toolfora.com/mcp", "--header", "Authorization:${LVNDR_AUTH}"],
       "env": { "LVNDR_AUTH": "Bearer lv_..." }
     }
   }

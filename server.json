@@ -4,7 +4,7 @@
   "title": "lvndr",
   "description": "Shopify store change log with attribution and precise undo, restore points and agent runs.",
   "version": "0.1.0",
-  "websiteUrl": "https://app-production-559c.up.railway.app/developers",
+  "websiteUrl": "https://lvndr.toolfora.com/developers",
   "repository": {
     "url": "https://github.com/kasazen/lvndr-agent",
     "source": "github"
@@ -12,7 +12,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://app-production-559c.up.railway.app/mcp"
+      "url": "https://lvndr.toolfora.com/mcp"
     }
   ]
 }

@@ -1,6 +1,6 @@
 # lvndr MCP tools
 
-Endpoint: `POST https://app-production-559c.up.railway.app/mcp` (Streamable HTTP, JSON-RPC:
+Endpoint: `POST https://lvndr.toolfora.com/mcp` (Streamable HTTP, JSON-RPC:
 `initialize`, `tools/list`, `tools/call`, `ping`). Auth: MCP OAuth (the client signs in through
 the Shopify admin with only the URL) or `Authorization: Bearer <LVNDR_API_KEY>`, the same key as
 the REST API. A key carries scopes (`read`, `undo`, `rollback`, `export`); new keys and OAuth

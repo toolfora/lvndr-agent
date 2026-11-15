@@ -21,7 +21,7 @@
 First public release, split out of the private lvndr app repository.
 
 - MCP server connection for Claude Code, Cursor, VS Code, Codex and Claude Desktop
-  (`https://app-production-559c.up.railway.app/mcp`, bearer `LVNDR_API_KEY` or MCP OAuth).
+  (`https://lvndr.toolfora.com/mcp`, bearer `LVNDR_API_KEY` or MCP OAuth).
 - Plugins: Claude Code (`.claude-plugin/`, with a marketplace manifest), Cursor (`.cursor-plugin/`,
   with the `lvndr.mdc` rule) and Codex (`.codex-plugin/`).
 - The `lvndr` skill: restore point or run first, verify what changed, undo by change, batch, run or

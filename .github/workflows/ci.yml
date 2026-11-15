@@ -34,7 +34,7 @@ jobs:
           const fail = (m) => { console.error(m); process.exit(1); };
           const versions = new Set([".claude-plugin/plugin.json", ".cursor-plugin/plugin.json", ".codex-plugin/plugin.json", "server.json", "cli/package.json"].map((f) => j[f].version));
           if (versions.size !== 1) fail(`versions differ: ${[...versions]}`);
-          const url = "https://app-production-559c.up.railway.app/mcp";
+          const url = "https://lvndr.toolfora.com/mcp";
           if (j[".mcp.json"].mcpServers.lvndr.url !== url) fail(".mcp.json url");
           if (j[".cursor-plugin/mcp.json"].mcpServers.lvndr.url !== url) fail("cursor mcp url");
           if (j["server.json"].remotes[0].url !== url) fail("server.json url");

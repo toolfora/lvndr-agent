@@ -21,7 +21,7 @@ plus `VERSION` in `cli/lvndr.mjs` and `metadata.version` in `skills/lvndr/SKILL.
 ```sh
 gh repo create kasazen/lvndr-agent --public \
   --description "lvndr for AI agents: MCP server, skill, Claude Code/Cursor/Codex plugins and CLI" \
-  --homepage https://app-production-559c.up.railway.app/developers
+  --homepage https://lvndr.toolfora.com/developers
 ```
 
 ## 2. Push the folder

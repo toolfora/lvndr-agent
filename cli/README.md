@@ -38,7 +38,7 @@ Where each setting comes from, first match wins:
 | Setting | Flag | Environment | Profile | Default |
 |---|---|---|---|---|
 | API key | `--key` | `LVNDR_API_KEY` | `key` | none (exit 3) |
-| App URL | `--url` | `LVNDR_API_URL` | `url` | `https://app-production-559c.up.railway.app` |
+| App URL | `--url` | `LVNDR_API_URL` | `url` | `https://lvndr.toolfora.com` |
 | Profile | `--profile` | `LVNDR_PROFILE` | | `defaultProfile`, else `default` |
 | Agent name (`X-Lvndr-Agent`) | `--agent` | `LVNDR_AGENT` | `agent` | `lvndr-cli` (`guard`: `lvndr-guard`) |
 | Run id (`X-Lvndr-Run-Id`) | `--run-id` | `LVNDR_RUN_ID` | | none |

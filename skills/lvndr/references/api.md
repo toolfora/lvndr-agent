@@ -1,6 +1,6 @@
 # lvndr REST API and CLI
 
-Base URL: `https://app-production-559c.up.railway.app/api/v1` (set `LVNDR_API_URL` to the app
+Base URL: `https://lvndr.toolfora.com/api/v1` (set `LVNDR_API_URL` to the app
 URL, without `/api/v1`, for another deployment). OpenAPI: `GET /api/v1/openapi.json` (no auth).
 Human docs: `/developers`. For language models: `/llms.txt`.
 
