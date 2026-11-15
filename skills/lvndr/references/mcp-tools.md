@@ -34,18 +34,21 @@ parentheses).
 | `lvndr_list_alerts` | Anomaly alerts (bursts by one actor) | `status` (open, dismissed, resolved, all), `limit` |
 | `lvndr_get_run` | One agent run with the changes tagged to it, plus `attributedThrough` and `pendingDeliveries` (how far LVNDR has caught up) | `id`, `limit`, `cursor` |
 | `lvndr_list_runs` | Recent agent runs | `limit`, `openOnly` |
-| `lvndr_get_job` | Progress of a background undo job (from `lvndr_undo_run`, `lvndr_undo_batch` or `lvndr_rollback`): status (queued, running, done, partial, failed), total, done, failed, skipped, remaining, error, one result per change | `id` (the job id) |
+| `lvndr_get_job` | Progress of a background undo job (from `lvndr_undo_run`, `lvndr_undo_batch`, `lvndr_undo_selection` or `lvndr_rollback`): status (queued, running, done, partial, failed), total, done, failed, skipped, remaining, error, one result per change | `id` (the job id) |
 | `lvndr_list_proposals` | Proposals on the store (open and partly applied by default), to see whether the merchant applied or rejected yours | `status` (open, applied, partly-applied, rejected, expired, all), `limit` |
 | `lvndr_get_proposal` | One proposal compared with the live store: each field now, as proposed and as it was when proposed; `changedSince` and status conflict when the store moved since | `id` |
 | `lvndr_compare_versions` | What differs between two stored versions of a record, in merchant words | `resourceId` (gid or Product-123), `from`, `to` (version numbers from lvndr_record_history) |
 | `lvndr_preview_restore_version` | What restoring a record to an earlier version would write (every differing field: ready, or unsupported with the reason). Returns the token for `lvndr_restore_version` | `resourceId`, `version` |
 | `lvndr_list_scheduled_undos` | Undos set to run later; status all also lists the ones that ran (done, skipped with the reason, failed) | `status` (scheduled, done, skipped, failed, cancelled, all), `limit` |
+| `lvndr_list_findings` | What agent QA, run budgets and the tug-of-war detector found, worst first (see "Agent QA" below) | `status` (open, dismissed, all), `runId`, `changeId`, `kind` (qa.price_zero, or a family: qa., budget., tugofwar), `limit` |
+| `lvndr_get_insights` | One run's or batch's findings, its changes grouped by pattern, and the narrowing that undoes only the flagged changes or only one group | `runId` or `anchorChangeId` (exactly one) |
+| `lvndr_plan_undo` | Plain words to a previewed undo: `understood` (how the request was read), the preview, a `confirmation_token` and `writeWith` (the write tool and its arguments) | `query` (the merchant's words) |
 
 ## Write
 
 | Tool | Scope | Use it to | Main arguments |
 |---|---|---|---|
-| `lvndr_start_run` | read | Open a run before changing the store; marks a restore point by default. Returns `capture`, `captureNote` and `warning` (set when the run will collect nothing: tell the user) | `task` (recommended), `agent`, `clientId` (used only if it is the key's own OAuth client id), `markRestorePoint` (default true) |
+| `lvndr_start_run` | read | Open a run before changing the store; marks a restore point by default. Returns `capture`, `captureNote` and `warning` (set when the run will collect nothing: tell the user) | `task` (recommended), `agent`, `clientId` (used only if it is the key's own OAuth client id), `markRestorePoint` (default true), `budget` (maxRecords, fieldKinds, maxPriceChangePct, autoUndo; see "Run budgets") |
 | `lvndr_end_run` | read | Close the run when done | `id` |
 | `lvndr_mark_restore_point` | read | Mark a point to roll back to | `label`, `reason`, `runId` |
 | `lvndr_undo` | undo | Undo one change (snapshot first, then write), or only some of its fields | `id`, `confirmation_token` (required, from lvndr_preview_undo), `includeConflicts` (must match the preview), `fields` (paths from the preview's `items[].path`; omit for every ready field), `reason`, `runId` |
@@ -57,6 +60,8 @@ parentheses).
 | `lvndr_restore_version` | undo | Put a record back to an earlier version (snapshot first), or only some fields of it | `resourceId`, `version`, `confirmation_token` (required, from lvndr_preview_restore_version), `fields` (paths from the preview's `items[].path`), `reason`, `runId` |
 | `lvndr_schedule_undo` | undo | Run a previewed undo at a set time; it runs only if the plan is unchanged then, else it is skipped with the reason. A rollback also needs `rollback` | `kind` (change, run, batch, rollback), `targetId`, `runAt` (ISO 8601 with a time zone), `confirmation_token` (required, from the matching preview), `fields`, `includeConflicts`, `excludeChangeIds`, `fieldKinds`, `reason`, `runId` |
 | `lvndr_cancel_scheduled_undo` | undo | Cancel a scheduled undo before it runs | `id` |
+| `lvndr_undo_selection` | undo | Undo every change matching change-log filters, newest first, as `lvndr_plan_undo` planned it. Returns a background `job` | `filters` (from writeWith.arguments), `confirmation_token` (required, from lvndr_plan_undo), `reason`, `runId`, `excludeChangeIds`, `fieldKinds` |
+| `lvndr_dismiss_finding` | undo | Dismiss a QA finding once it is explained or undone (a read-only key cannot) | `id` |
 
 Every store write needs the `confirmation_token` from its preview: 10 minutes, single use, bound
 to the key, the target and what the preview saw. There is no `confirm` or `dryRun` shortcut. A
@@ -158,3 +163,40 @@ back to one (same token rules as an undo). `lvndr_schedule_undo` runs any previe
 ("put the prices back Monday at 9"): pass the preview's `confirmation_token`; at `runAt` LVNDR
 previews again and runs it only if nothing moved, otherwise the scheduled undo is `skipped` with
 the reason (`lvndr_list_scheduled_undos {status: "all"}`).
+## Agent QA
+
+LVNDR checks every change and every run as a whole, a few minutes after attribution:
+
+- per change: a price set to 0 or below, a price moved more than +900% or -90%, text emptied,
+  broken HTML;
+- per run or batch: prices moved more than the run's `task` says ("raise prices 10%") or far from
+  the run's median move, the same text written to many records or a sentence repeated, a language
+  switch, SEO title or description over length, a SKU or barcode that breaks its siblings'
+  pattern, stock zeroed on many records, and (when the merchant's LVNDR has a model key) a review
+  of the task against the diffs;
+- a run over its budget, and two actors flipping one field back and forth (`tugofwar`, with
+  `tug.sides[i].keep`: the `lvndr_preview_undo` call, `id` and `fields`, that keeps side i).
+
+After your run, call `lvndr_get_insights {runId}`. `flagged.narrowing` and each
+`patterns[].narrowing` are `excludeChangeIds` and `fieldKinds` for `lvndr_preview_undo_run`: pass
+them, show the merchant the narrowed plan, then `lvndr_undo_run` with the same narrowing. A
+pattern group marked `odd` is smaller than the biggest group of its kind ("20 prices +100%" next to
+"40 prices +10%"): usually the mistake.
+
+## Run budgets
+
+`lvndr_start_run {budget: {maxRecords, fieldKinds, maxPriceChangePct, autoUndo}}` declares what the
+run will do: at most N distinct records, only these kinds of field (as previews name them: Price,
+Compare-at price, Tags, ...; a create or delete counts as outside), no price moved more than the
+percentage either way. A change that goes over raises a `budget.*` finding and an alert within the
+same scheduler tick. With `autoUndo: true` (needs the undo scope) LVNDR also queues a narrowed undo
+of the excess: changes beyond `maxRecords` whole, otherwise only the kinds of field that broke the
+budget. Stay inside the budget you declared.
+
+## Plain-language plans
+
+`lvndr_plan_undo {query: "undo the price changes Claude made yesterday, except on snowboards"}`
+reads who, when, which records, which kinds of field and what to leave out, resolves it to an agent
+run or a change-log selection, and previews it. Show the merchant `understood` and the preview. If
+they agree, call `writeWith.tool` with `writeWith.arguments` plus the `confirmation_token`. If the
+reading is wrong, ask them to rephrase; never write a plan they have not seen.

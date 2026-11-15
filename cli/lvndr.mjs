@@ -44,11 +44,13 @@ export class CliError extends Error {
 const BOOLEAN_FLAGS = new Set([
   "json", "ndjson", "quiet", "help", "version", "run", "yes", "include-conflicts", "confirm", "all",
   "no-restore-point", "hide-undos", "no-verify", "no-retry", "with-token", "apply", "reject",
+  "auto-undo", "flagged",
 ]);
 const VALUE_FLAGS = new Set([
   "key", "url", "profile", "agent", "run-id", "reason", "task", "client-id", "format", "since", "until",
   "out", "limit", "cursor", "type", "action", "resource-id", "actor", "q", "status", "wait", "timeout",
   "plan-hash", "kind", "field", "only", "exclude", "at", "item", "title", "note",
+  "max-records", "max-price-change", "group", "batch", "change-id",
 ]);
 /** Value flags that may be given more than once; they collect into an array. */
 const REPEATABLE_FLAGS = new Set(["field", "only", "exclude", "item"]);
@@ -65,6 +67,42 @@ function narrowing(flags) {
   if (flags.exclude?.length) body.excludeChangeIds = flags.exclude;
   const echo = [...(flags.only ?? []).map((k) => ` --only ${shellQuote(k)}`), ...(flags.exclude ?? []).map((x) => ` --exclude ${shellQuote(x)}`)].join("");
   return { body, echo };
+}
+
+/**
+ * --flagged / --group <key> on `run undo` and `undo-batch`: fetch the target's insights and use
+ * the narrowing the server computed (only the changes QA flagged, or only one pattern group).
+ * Merged with --only/--exclude; returns the body fields and the flags to echo.
+ */
+async function insightNarrowing(ctx, flags, insightsPath) {
+  const n = narrowing(flags);
+  if (!flags.flagged && !flags.group) return n;
+  const r = await request(ctx, "GET", insightsPath);
+  let pick;
+  if (flags.flagged) {
+    pick = r.flagged?.narrowing;
+    if (!pick) throw new CliError("nothing flagged is left to undo here (lvndr findings lists what QA found)");
+  } else {
+    const g = (r.patterns ?? []).find((x) => x.key === flags.group);
+    if (!g) throw new CliError(`no pattern group ${flags.group}; groups: ${(r.patterns ?? []).map((x) => `${x.key} (${x.title})`).join(", ") || "none"}`);
+    pick = g.narrowing;
+    if (!pick) throw new CliError(`nothing in group ${flags.group} is left to undo`);
+  }
+  const exclude = [...new Set([...(pick.excludeChangeIds ?? []), ...(flags.exclude ?? [])])];
+  const kinds = [...new Set([...(flags.only ?? []), ...(pick.fieldKinds ?? [])])];
+  const body = { ...(exclude.length ? { excludeChangeIds: exclude } : {}), ...(kinds.length ? { fieldKinds: kinds } : {}) };
+  const echo = `${flags.flagged ? " --flagged" : ""}${flags.group ? ` --group ${shellQuote(flags.group)}` : ""}${(flags.only ?? []).map((k) => ` --only ${shellQuote(k)}`).join("")}${(flags.exclude ?? []).map((x) => ` --exclude ${shellQuote(x)}`).join("")}`;
+  return { body, echo };
+}
+
+/** The narrowing flags that reproduce a body's excludeChangeIds and fieldKinds on a command line. */
+function narrowingEcho(body) {
+  return [...(body?.fieldKinds ?? []).map((k) => ` --only ${shellQuote(k)}`), ...(body?.excludeChangeIds ?? []).map((x) => ` --exclude ${shellQuote(x)}`)].join("");
+}
+
+const SEVERITY_WORD = { critical: "CRITICAL", warning: "check", info: "note" };
+function findingLines(list) {
+  return table([["ID", 26], ["SEVERITY", 8], ["KIND", 22], ["CHANGE", 26], ["MESSAGE", 0]], (list ?? []).map((f) => [f.id, SEVERITY_WORD[f.severity] ?? f.severity, f.kind, f.changeId ?? "", f.message]));
 }
 
 /** After a multi-change preview: the kinds of field in it, and how to put back only some. */
@@ -620,16 +658,21 @@ export const USAGE = Object.freeze({
   export: "export [--format csv|json] [--since 7d] [--until ISO] [--out file]",
   openapi: "openapi",
   undo: "undo <id> [--field <path>]... [--include-conflicts] [--reason text]  |  undo <id> --run --plan-hash <h> [--field <path>]...  |  undo <id> --yes",
-  "undo-batch": "undo-batch <id> [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  undo-batch <id> --run --plan-hash <h> [--only <kind>]...  |  undo-batch <id> --yes",
+  "undo-batch": "undo-batch <id> [--flagged | --group <key>] [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  undo-batch <id> --run --plan-hash <h> [--only <kind>]...  |  undo-batch <id> --yes",
   mark: "mark <label...> [--reason text]",
   rollback: "rollback <pointId> --confirm --plan-hash <h> [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  rollback <pointId> --yes",
   job: "job <id>",
   dismiss: "dismiss <alertId>",
-  "run start": "run start [--agent name] [--task text] [--client-id id] [--no-restore-point]",
+  "run start": "run start [--agent name] [--task text] [--client-id id] [--no-restore-point] [--max-records N] [--only <kind>]... [--max-price-change PCT] [--auto-undo]",
   "run end": "run end [id]",
   "run show": "run show [id] [--cursor c]",
   "run list": "run list [--limit 20]",
-  "run undo": "run undo [id] [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  run undo [id] --run --plan-hash <h> [--only <kind>]...  |  run undo [id] --yes",
+  "run undo": "run undo [id] [--flagged | --group <key>] [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  run undo [id] --run --plan-hash <h> [--only <kind>]...  |  run undo [id] --yes",
+  findings: "findings [--run-id id] [--change-id id] [--kind qa.] [--all] [--limit 50]",
+  "dismiss-finding": "dismiss-finding <findingId>",
+  insights: "insights [runId]  |  insights --batch <changeId>",
+  plan: "plan <what to undo, in plain words...>  |  plan <words...> --yes",
+  "undo-selection": "undo-selection <filters> [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  undo-selection <filters> --run --plan-hash <h>  |  undo-selection <filters> --yes",
   guard: "guard [--agent name] [--task text] [--wait 300] -- <command...>",
   login: "login [--key lv_... | --with-token] [--url URL] [--profile name] [--no-verify]",
   propose: "propose <file.json | -> [--title text] [--note text]",
@@ -664,7 +707,15 @@ const DETAIL = {
     "Undo every change after a restore point, newest first. Preview first with `lvndr preview <pointId>`, then pass --confirm and the --plan-hash it printed.\n--yes: for a person at a terminal: preview, ask, then roll back.",
   job: "One background undo job and its progress.",
   dismiss: "Dismiss an anomaly alert (needs a key with the Undo scope).",
-  "run start": "Announce an agent run (marks a restore point unless --no-restore-point). The agent name defaults to --agent, LVNDR_AGENT or the profile's agent. Prints what the run will collect, and a WARNING when it will collect nothing.",
+  findings: "What agent QA, run budgets and the tug-of-war detector found, worst first: prices at 0 or moved more than the task said, emptied or broken text, a run over its budget, two actors flipping one field. --all includes dismissed ones; --kind qa. or budget. or tugofwar narrows.",
+  "dismiss-finding": "Dismiss a finding once it is explained or undone (needs a key with the Undo scope).",
+  insights:
+    "One run's (or, with --batch, one batch's) findings and its changes grouped by pattern (\"Price +10% (40 changes)\"). Prints the group keys; undo only one group with `lvndr run undo <id> --group <key>`, or only the flagged changes with --flagged.",
+  plan:
+    "Turn plain words into a previewed undo: `lvndr plan \"undo the price changes Claude made yesterday, except on snowboards\"`. Prints how the request was read, the preview, and the exact command that writes that plan (run undo or undo-selection with --plan-hash). Writes nothing.\n--yes: for a person at a terminal: plan, ask Apply? [y/N], then write it.",
+  "undo-selection":
+    "Undo every change matching change-log filters (a query string such as actor=Claude&from=2026-11-14), newest first. `lvndr plan` prints this command with the filters filled in.\n--run --plan-hash <h>: queue that plan as a background job and wait for it.",
+  "run start": "Announce an agent run (marks a restore point unless --no-restore-point). --max-records, --only <kind> (repeatable) and --max-price-change declare a budget: going over raises a finding and an alert at once; --auto-undo also undoes the excess (needs the Undo scope). The agent name defaults to --agent, LVNDR_AGENT or the profile's agent. Prints what the run will collect, and a WARNING when it will collect nothing.",
   "run end": "Close the current (or named) run. Ending it again is harmless.",
   "run show": "One run, its changes and how fresh the tagging is (attributedThrough, pending deliveries).",
   "run list": "Recent agent runs.",
@@ -713,6 +764,8 @@ Read
   preview <pointId>                    what rolling back to a point would write
   alerts [--all]                       open anomaly alerts (--all includes dismissed)
   run show [id] | run list             agent runs
+  findings [--run-id id] [--all]       what agent QA flagged
+  insights [runId] | --batch <id>      findings and pattern groups of a run or batch
   export [--format csv|json] [--since] [--until] [--out file]
   openapi                              the API's OpenAPI document
 
@@ -720,13 +773,17 @@ Write (every write is bound to the plan its preview printed)
   undo <id> [--include-conflicts]      preview; prints the line that runs exactly that plan
   undo <id> --run --plan-hash <h>      write the previewed plan
   undo-batch <id> [--run --plan-hash <h>]
-  run undo [id] [--run --plan-hash <h>]
+  run undo [id] [--run --plan-hash <h>] [--flagged | --group <key>]
+  plan "<what to undo>"                plain words -> a previewed plan and the line that writes it
+  undo-selection <filters> [--run --plan-hash <h>]
+  dismiss-finding <findingId>          (needs the Undo scope)
   rollback <pointId> --confirm --plan-hash <h>   (preview with: lvndr preview <pointId>)
   --yes                                a person at a terminal: preview, ask Apply? [y/N], write
   mark <label...> [--reason text]      mark a restore point now
   job <id>                             one background undo job and its progress
   dismiss <alertId>                    (needs the Undo scope)
   run start [--agent name] [--task text] [--client-id id] [--no-restore-point]
+            [--max-records N] [--only <kind>] [--max-price-change PCT] [--auto-undo]
   run end [id]
                                        undo-batch, run undo and rollback queue a job and wait for it
   guard [--agent name] [--task text] [--wait 300] -- <command...>
@@ -1073,7 +1130,7 @@ async function dispatch(parsed, io) {
     case "undo-batch": {
       need(args, 1, USAGE["undo-batch"]);
       const path = `/batches/${enc(args[0])}/undo`;
-      const n = narrowing(flags);
+      const n = await insightNarrowing(ctx, flags, `/batches/${enc(args[0])}/insights`);
       return writeFlow({
         flags,
         io,
@@ -1154,7 +1211,13 @@ async function dispatch(parsed, io) {
         // Same rule as POST /runs: an agent name is required, and the CLI always has one
         // (--agent, LVNDR_AGENT, the profile's agent, or "lvndr-cli"). The task is optional.
         const agent = flags.agent ?? ctx.agent;
-        const r = await request({ ...ctx, agent }, "POST", "/runs", { body: { agent, task: flags.task, clientId: flags.clientId, markRestorePoint: !flags.noRestorePoint } });
+        const budget = {
+          ...(flags.maxRecords !== undefined ? { maxRecords: Number(flags.maxRecords) } : {}),
+          ...(flags.only?.length ? { fieldKinds: flags.only } : {}),
+          ...(flags.maxPriceChange !== undefined ? { maxPriceChangePct: Number(String(flags.maxPriceChange).replace(/%$/, "")) } : {}),
+          ...(flags.autoUndo ? { autoUndo: true } : {}),
+        };
+        const r = await request({ ...ctx, agent }, "POST", "/runs", { body: { agent, task: flags.task, clientId: flags.clientId, markRestorePoint: !flags.noRestorePoint, ...(Object.keys(budget).length ? { budget } : {}) } });
         const runId = runIdOf(r);
         if (runId) {
           ctx.config.currentRun = { ...(ctx.config.currentRun ?? {}), [ctx.profileName]: runId };
@@ -1164,7 +1227,7 @@ async function dispatch(parsed, io) {
         if (r.warning && (flags.json || flags.quiet)) io.stderr.write(`lvndr: WARNING: ${r.warning}\n`);
         return {
           result: r,
-          human: [...(r.warning ? [`WARNING: ${r.warning}`] : []), `run ${runId} started${point ? `, restore point ${point}` : ""}`, ...(r.captureNote ? [`capture ${r.capture ?? "?"}: ${r.captureNote}`] : []), `export LVNDR_RUN_ID=${runId}`],
+          human: [...(r.warning ? [`WARNING: ${r.warning}`] : []), `run ${runId} started${point ? `, restore point ${point}` : ""}`, ...(r.captureNote ? [`capture ${r.capture ?? "?"}: ${r.captureNote}`] : []), ...(r.run?.budgetSummary ? [`budget: ${r.run.budgetSummary}`] : []), `export LVNDR_RUN_ID=${runId}`],
           quietIds: [runId],
         };
       }
@@ -1213,7 +1276,7 @@ async function dispatch(parsed, io) {
       if (sub === "undo") {
         const runId = currentRun(ctx, id);
         const path = `/runs/${enc(runId)}/undo`;
-        const n = narrowing(flags);
+        const n = await insightNarrowing(ctx, flags, `/runs/${enc(runId)}/insights`);
         return writeFlow({
           flags,
           io,
@@ -1348,6 +1411,66 @@ async function dispatch(parsed, io) {
       need(args, 1, USAGE.unschedule);
       const r = await request(ctx, "POST", `/scheduled-undos/${enc(args[0])}/cancel`, { body: {} });
       return { result: r, human: [`cancelled ${r.scheduled?.id ?? args[0]}: ${r.scheduled?.label ?? ""}`], quietIds: [r.scheduled?.id] };
+    }
+    case "findings": {
+      const r = await request(ctx, "GET", "/findings", { query: { status: flags.all ? "all" : flags.status ?? "open", runId: flags.runId, changeId: flags.changeId, kind: flags.kind, limit: parseLimit(flags.limit, 200) } });
+      const list = r.findings ?? [];
+      const human = findingLines(list);
+      if (!list.length) human.push("nothing flagged");
+      const notes = list.some((f) => f.runId) ? [`undo only the flagged changes of a run: lvndr run undo <runId> --flagged`] : [];
+      return { result: r, human, notes, list, quietIds: list.map((f) => f.id) };
+    }
+    case "dismiss-finding": {
+      need(args, 1, USAGE["dismiss-finding"]);
+      const r = await request(ctx, "POST", `/findings/${enc(args[0])}/dismiss`, { body: {} });
+      return { result: r, human: [r.dismissed === false ? `finding ${args[0]} was already dismissed; nothing changed` : `dismissed ${args[0]}`] };
+    }
+    case "insights": {
+      const batch = flags.batch;
+      const runId = batch ? null : currentRun(ctx, args[0]);
+      const r = await request(ctx, "GET", batch ? `/batches/${enc(batch)}/insights` : `/runs/${enc(runId)}/insights`);
+      const undo = batch ? `lvndr undo-batch ${batch}` : `lvndr run undo ${runId}`;
+      const human = [];
+      if (r.budgetSummary) human.push(`budget: ${r.budgetSummary}`);
+      human.push(...findingLines(r.findings));
+      if (!(r.findings ?? []).length) human.push("nothing flagged");
+      human.push("", "Patterns:");
+      human.push(...table([["GROUP", 28], ["CHANGES", 7], ["WHAT", 0]], (r.patterns ?? []).map((g) => [g.key, g.changeIds?.length ?? 0, `${g.kind === "(record)" ? "" : `${g.kind} `}${g.label}${g.odd ? "  (odd one out)" : ""}`])).map((l) => `  ${l}`));
+      if (r.flagged?.narrowing) human.push("", `Undo only the flagged changes: ${undo} --flagged`);
+      if ((r.patterns ?? []).some((g) => g.narrowing)) human.push(`Undo only one group:           ${undo} --group <GROUP>`);
+      return { result: r, human, list: r.findings ?? [] };
+    }
+    case "plan": {
+      const text = args.join(" ").trim();
+      if (!text) throw new CliError(`usage: lvndr ${USAGE.plan}`);
+      const r = await request(ctx, "POST", "/plan-undo", { body: { query: text } });
+      const head = ["Understood:", ...(r.understood ?? []).map((l) => `  ${l}`), ...(r.usedModel ? ["  (read with the model's help; check it)"] : []), ""];
+      const body = r.next?.body ?? {};
+      const echo = narrowingEcho(body);
+      const runCommand = r.target?.kind === "run" ? `lvndr run undo ${r.target.runId} --run${echo}` : `lvndr undo-selection ${shellQuote(r.target?.filters ?? "")} --run${echo}`;
+      if (nothingToUndo(r)) return { result: r, human: [...head, ...previewLines(r), "Nothing to undo; nothing was written."] };
+      if (flags.yes) {
+        if (!(io.stdin ?? process.stdin).isTTY) throw new CliError("--yes is for a person at a terminal. Show the plan, then run the line it prints.");
+        const out = flags.json || flags.quiet ? io.stderr : io.stdout;
+        for (const line of [...head, ...previewLines(r)]) out.write(`${line}\n`);
+        if (!(await confirm("Apply this undo to the live store? [y/N] ", io))) return { result: { ...r, applied: false }, human: ["Not applied; nothing was written."] };
+        return finishQueued(ctx, await request(ctx, "POST", r.next.path.replace(/^\/api\/v1/, ""), { body: { ...body, reason: flags.reason ?? `Plan: ${text}`.slice(0, 500) } }), io, flags);
+      }
+      return { result: r, human: [...head, ...previewLines(r), "preview only; nothing was written.", `To run exactly this plan: ${runCommand} --plan-hash ${r.planHash}`] };
+    }
+    case "undo-selection": {
+      need(args, 1, USAGE["undo-selection"]);
+      const filters = args[0];
+      const n = narrowing(flags);
+      return writeFlow({
+        flags,
+        io,
+        preview: () => request(ctx, "POST", "/selections/undo", { body: { filters, dryRun: true, reason: flags.reason, ...n.body } }),
+        write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", "/selections/undo", { body: { filters, dryRun: false, planHash, reason: flags.reason, ...n.body } }), io, flags),
+        previewCommand: `lvndr undo-selection ${shellQuote(filters)}${n.echo}`,
+        runCommand: `lvndr undo-selection ${shellQuote(filters)} --run${n.echo}`,
+        extra: (r) => kindHints(r, flags, `lvndr undo-selection ${shellQuote(filters)}`),
+      });
     }
     case "export": {
       const text = await request(ctx, "GET", "/export", { raw: true, query: { format: flags.format, since: toIso(flags.since), until: toIso(flags.until) } });

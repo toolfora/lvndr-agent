@@ -55,7 +55,7 @@ are opt-in when the key is made.
 | `POST /restore-points/:id/rollback` | rollback | `{confirm: true, planHash, reason}`, both required; 202 `{pointId, job}` | `lvndr rollback <id> --confirm --plan-hash h` |
 | `GET /alerts` | read | `status=open|dismissed|all` (`all` also lists `resolved`), `limit` | `lvndr alerts [--all]` |
 | `POST /alerts/:id/dismiss` | undo | | `lvndr dismiss <id>` |
-| `POST /runs` | read | `{agent, task, clientId, markRestorePoint}` (`markRestorePoint` defaults to true); returns `{run, capture, captureNote}` | `lvndr run start --agent <name>` |
+| `POST /runs` | read | `{agent, task, clientId, markRestorePoint, budget}` (`markRestorePoint` defaults to true; `budget`: `{maxRecords, fieldKinds, maxPriceChangePct, autoUndo}`, autoUndo needs `undo`); returns `{run, capture, captureNote}` | `lvndr run start --agent <name> [--max-records n --only kind --max-price-change pct --auto-undo]` |
 | `GET /runs` | read | `limit, open` | `lvndr run list` |
 | `GET /runs/:id` | read | `cursor, limit`; returns `{run, changes, nextCursor, attributedThrough, pendingDeliveries}` | `lvndr run show [id]` |
 | `POST /runs/:id/end` | read | | `lvndr run end [id]` |
@@ -73,6 +73,12 @@ are opt-in when the key is made.
 | `GET /scheduled-undos` | read | `status` (scheduled default, done, skipped, failed, cancelled, all), `limit` | `lvndr scheduled [--all]` |
 | `GET /scheduled-undos/:id` | read | one scheduled undo and its `result` | |
 | `POST /scheduled-undos/:id/cancel` | undo | 409 `not_scheduled` once it ran | `lvndr unschedule <id>` |
+| `GET /findings` | read | `status=open|dismissed|all, runId, changeId, kind (qa. budget. tugofwar), limit` -> `{findings}` | `lvndr findings` |
+| `POST /findings/:id/dismiss` | undo | | `lvndr dismiss-finding <id>` |
+| `GET /runs/:id/insights` | read | -> `{findings, patterns, flagged, budget, budgetSummary}`; every `narrowing` is `{excludeChangeIds, fieldKinds}` for `POST /runs/:id/undo` | `lvndr insights [id]` |
+| `GET /batches/:id/insights` | read | the same for a batch | `lvndr insights --batch <id>` |
+| `POST /plan-undo` | read | `{query}` -> `understood`, the preview, `planHash` and `next` (the write: `POST /runs/:id/undo` or `POST /selections/undo`) | `lvndr plan "<words>"` |
+| `POST /selections/undo` | undo | `{filters, dryRun, planHash, excludeChangeIds, fieldKinds, reason}`; dry run 200, real run 202 `{job}` | `lvndr undo-selection <filters>` |
 | `GET /export` | export | `format=csv|json, since, until` | `lvndr export` |
 | `GET /openapi.json` | none | | `lvndr openapi` |
 
