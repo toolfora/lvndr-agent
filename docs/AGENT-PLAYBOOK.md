@@ -83,6 +83,19 @@ secret exists, `X-Lvndr-Signature: sha256=<hex>`, an HMAC-SHA256 of the raw body
 Verify the signature over the raw body before acting on it. A receiver can page someone, post to
 chat, or call `lvndr batch <anchorChangeId>` to list the burst.
 
+### Agent QA, budgets, tug of war and the digest
+
+- Every run is checked by agent QA a few minutes after its changes are attributed: prices at 0 or
+  moved more than the task says, emptied, duplicated or broken text, a language switch, SEO text
+  over length, codes that break their siblings' pattern, stock zeroed in bulk. Findings show on
+  the run page with "Undo only the flagged" and pattern groups ("Price +100%, 20 changes").
+- Give agents a budget when they start a run (`--max-records`, `--only`, `--max-price-change`);
+  going over it alerts at once, and `--auto-undo` (a key with Undo) undoes the excess.
+- Two actors flipping one field (a sync app against staff) raise a tug-of-war alert naming both,
+  with "keep A" / "keep B" previews on the change page.
+- Settings > Daily digest sends one email or Slack message a day with what agents and apps
+  changed and what QA flagged, each with a preview link.
+
 ## 4. When an agent goes wrong
 
 1. **Stop the agent.** Revoke its key in **Settings > Agents & API** if it may keep going; revoke its Shopify access

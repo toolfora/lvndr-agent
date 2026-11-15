@@ -91,7 +91,7 @@ prints one command's usage.
 | `lvndr history <gid\|Type-digits>` | A record's stored versions and changes (`Product-123`, `gid://shopify/Product/123`) |
 | `lvndr undo <id> [--run --plan-hash h \| --yes] [--field path]... [--include-conflicts] [--reason text]` | Preview the undo of one change (or only some of its fields), or write the previewed plan |
 | `lvndr batch <id>` | Everything the same actor did around a change, no gap over 10 minutes |
-| `lvndr undo-batch <id> [--run --plan-hash h \| --yes] [--reason text]` | Preview or undo that batch, newest first (a job) |
+| `lvndr undo-batch <id> [--run --plan-hash h \| --yes] [--flagged \| --group key] [--reason text]` | Preview or undo that batch, newest first (a job) |
 | `lvndr points [--all \| --kind k] [--limit n] [--cursor c]` | Restore points (the daily check's only with `--all`) |
 | `lvndr mark <label...> [--reason text]` | Mark a restore point now |
 | `lvndr preview <pointId>` | What rolling back to a point would undo |
@@ -99,11 +99,16 @@ prints one command's usage.
 | `lvndr job <id>` | One background undo job: status, counts and per-change results |
 | `lvndr alerts [--all]` | Open anomaly alerts (`--all` adds dismissed and resolved ones) |
 | `lvndr dismiss <alertId>` | Dismiss an alert |
-| `lvndr run start [--agent name] [--task text] [--client-id id] [--no-restore-point]` | Open an agent run with a restore point; saves it as the current run for the profile and prints what the run will capture (a WARNING when it captures nothing) |
+| `lvndr run start [--agent name] [--task text] [--client-id id] [--no-restore-point] [--max-records n] [--only kind]... [--max-price-change pct] [--auto-undo]` | Open an agent run with a restore point (and an optional budget); saves it as the current run for the profile and prints what the run will capture (a WARNING when it captures nothing) |
 | `lvndr run end [id]` | End the run (default: the current run) |
 | `lvndr run show [id]` | The run and the changes tagged to it |
 | `lvndr run list` | Recent runs |
-| `lvndr run undo [id] [--run --plan-hash h \| --yes] [--reason text]` | Preview or undo every change in the run (a job) |
+| `lvndr run undo [id] [--run --plan-hash h \| --yes] [--flagged \| --group key] [--reason text]` | Preview or undo every change in the run (a job); `--flagged` only what agent QA flagged, `--group` only one pattern group |
+| `lvndr findings [--run-id id] [--change-id id] [--kind qa.] [--all]` | What agent QA, run budgets and the tug-of-war detector found, worst first |
+| `lvndr dismiss-finding <findingId>` | Dismiss a finding (needs the Undo scope) |
+| `lvndr insights [runId] \| lvndr insights --batch <changeId>` | A run's or batch's findings and its changes grouped by pattern, with the `--flagged` / `--group` lines |
+| `lvndr plan "<what to undo>" [--yes]` | Plain words to a previewed plan: prints what it understood and the exact write command |
+| `lvndr undo-selection <filters> [--run --plan-hash h \| --yes] [--only kind]... [--exclude id]...` | Preview or undo every change matching change-log filters (a job) |
 | `lvndr export [--format csv\|json] [--since] [--until] [--out file]` | Download the change log |
 | `lvndr guard [--agent name] [--task text] [--client-id id] [--no-restore-point] [--wait 300] -- <command...>` | Run a command inside a run with a restore point (below) |
 | `lvndr login [--key k \| --with-token] [--url u] [--profile p] [--agent a] [--no-verify]` | Save a profile (checks the key with `GET /me` unless `--no-verify`; the key is not echoed; `--with-token` reads it from stdin) |
@@ -120,6 +125,22 @@ the run saved by `run start`.
 included, for up to 24 hours). A key without `undo` gets a run that captures only changes linked
 to its own OAuth client (`client`), or nothing (`none`) for a Settings key. `--client-id` is used
 only when it is the key's own OAuth client id, and then the run is `client`.
+
+### Agent QA, budgets and plans
+
+```sh
+# declare a budget: going over raises a finding and an alert; --auto-undo undoes the excess
+lvndr run start --task "Raise winter prices 10%" --max-records 50 --only Price --max-price-change 15
+lvndr insights                                   # after the run: findings and pattern groups
+lvndr run undo --flagged                          # preview undoing only what QA flagged
+lvndr run undo --group 'Price|pct:100'            # or only one pattern group
+lvndr plan "undo the price changes Claude made yesterday, except on snowboards"
+# -> what it understood, the preview, and e.g.
+#    lvndr undo-selection 'actor=claude&from=2026-11-14&to=2026-11-14' --run --only Price --exclude cm... --plan-hash h
+```
+
+`plan` writes nothing. Run the line it prints to write exactly that plan; the request is not read
+again, so "yesterday" cannot shift between the preview and the write.
 
 ### Global flags
 

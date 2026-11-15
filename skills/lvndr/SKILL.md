@@ -36,6 +36,9 @@ Follow these steps every time you are about to write to a store, whatever tool d
    steps 2, 4 and 5 for you.
    If you cannot start a run, at least `lvndr_mark_restore_point` with a label naming the task.
    Marking a restore point and starting a run need only the `read` scope, on every surface.
+   Declare a `budget` when you know the scope (`{maxRecords, fieldKinds, maxPriceChangePct}`;
+   CLI `--max-records --only --max-price-change`): LVNDR alerts the merchant the moment you go
+   over it, and with `autoUndo` undoes the excess. Stay inside what you declared.
    Read the start response's `capture`: `all-unattributed` (the key has `undo`) means the run
    takes every unattributed or inferred change while open (up to 24 hours), staff edits too, so
    end it promptly; `client` (an OAuth token without `undo`, or a `clientId` that is your own OAuth
@@ -50,7 +53,10 @@ Follow these steps every time you are about to write to a store, whatever tool d
    `lvndr run show <id> --json`) about every 20 seconds until `attributedThrough` is after your
    last write and `pendingDeliveries` is 0; do not judge the run from an earlier read. Then compare
    what changed with what you intended: right records, right fields, nothing extra. Report the
-   change ids to the user. `lvndr guard` does this wait for you.
+   change ids to the user. `lvndr guard` does this wait for you. Then read
+   `lvndr_get_insights {runId}` (CLI `lvndr insights`): agent QA's findings on your own work
+   (prices at 0 or off the task, emptied or broken text, odd SKUs, stock zeroed) and the run's
+   changes grouped by pattern. Fix or report every critical and warning finding.
 6. **Undo precisely when something is wrong.** Always preview first, then write:
    - one change: `lvndr_preview_undo`, then `lvndr_undo` with the `confirmation_token` it returned
      (CLI: `lvndr undo <id>` then `lvndr undo <id> --run --plan-hash <hash>` as the preview prints)
@@ -69,6 +75,12 @@ Follow these steps every time you are about to write to a store, whatever tool d
    Run undo, batch undo and rollback run in the background: the write returns a `job`. Poll
    `lvndr_get_job` with its id every few seconds until `status` is `done`, `partial` or
    `failed`, then report it (the CLI waits and polls for you; `lvndr job <id>` checks later).
+   - only what QA flagged, or one pattern group: pass `flagged.narrowing` or a group's
+     `narrowing` from `lvndr_get_insights` as `excludeChangeIds` and `fieldKinds` to the run
+     preview and write (CLI: `lvndr run undo <id> --flagged` or `--group <key>`)
+   - when the user says what to undo in plain words: `lvndr_plan_undo {query}` (CLI
+     `lvndr plan "<words>"`), show them `understood` and the preview, then call `writeWith.tool`
+     with its arguments and the token (CLI: the line `plan` prints)
    Prefer the narrowest undo that fixes the problem. A rollback also reverts changes other people
    made after the point; read the preview and say so to the user before running it.
    Pass a `reason` on every undo, rollback and restore point; it lands in the audit log.
