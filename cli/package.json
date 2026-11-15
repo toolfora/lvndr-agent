@@ -1,7 +1,7 @@
 {
   "name": "lvndr",
   "version": "0.1.0",
-  "description": "Command line for lvndr, the Shopify store time machine: change log, undo by change, restore points and agent runs.",
+  "description": "Command line for LVNDR by Toolfora, the Shopify store time machine: change log, undo by change, restore points and agent runs.",
   "type": "module",
   "bin": {
     "lvndr": "lvndr.mjs"
@@ -33,6 +33,6 @@
   "bugs": {
     "url": "https://github.com/kasazen/lvndr-agent/issues"
   },
-  "author": "HereNow Labs",
+  "author": "Toolfora (HereNow Labs, Inc.)",
   "license": "MIT"
 }

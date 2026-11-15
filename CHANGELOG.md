@@ -18,7 +18,7 @@
 
 ## 0.1.0 (2026-11-13)
 
-First public release, split out of the private lvndr app repository.
+First public release, split out of the private LVNDR app repository.
 
 - MCP server connection for Claude Code, Cursor, VS Code, Codex and Claude Desktop
   (`https://lvndr.toolfora.com/mcp`, bearer `LVNDR_API_KEY` or MCP OAuth).

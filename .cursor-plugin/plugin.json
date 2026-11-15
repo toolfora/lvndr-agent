@@ -3,7 +3,7 @@
   "description": "Store time machine for Shopify: what changed in a store, who made it as far as Shopify says, and a precise undo. MCP tools, the safe-change skill and a rule.",
   "version": "0.1.0",
   "author": {
-    "name": "HereNow Labs"
+    "name": "Toolfora (HereNow Labs, Inc.)"
   },
   "homepage": "https://lvndr.toolfora.com/developers",
   "repository": "https://github.com/kasazen/lvndr-agent",

@@ -1,13 +1,13 @@
 # Agent playbook
 
 For the person who lets AI agents, scripts or other automation change a Shopify store that has
-lvndr installed. It covers how to give an agent access, how to keep its work reversible, how to
+LVNDR installed. It covers how to give an agent access, how to keep its work reversible, how to
 hear about trouble and what to do when an agent goes wrong. The agent-side instructions are in
 [`skills/lvndr/SKILL.md`](../skills/lvndr/SKILL.md).
 
 ## 1. Give each agent its own key
 
-Create keys in **lvndr > Settings > Agents & API**. The key is shown once and stored only as a hash.
+Create keys in **LVNDR > Settings > Agents & API**. The key is shown once and stored only as a hash.
 One key per agent or pipeline: the key id is recorded on every undo, restore point and export it
 makes, and revoking one key does not stop the others.
 
@@ -20,8 +20,8 @@ makes, and revoking one key does not stop the others.
 
 Every key has `read`. New keys (and OAuth grants that ask for no scope) get `read` and `undo`;
 `rollback` and `export` are opt-in. Start an agent on `read` and add scopes when it has earned them. A
-read-only key cannot write to the store through lvndr, but lvndr does not control the agent's
-other tools (its Shopify Admin token, the Shopify CLI): lvndr records and reverses, it does not
+read-only key cannot write to the store through LVNDR, but LVNDR does not control the agent's
+other tools (its Shopify Admin token, the Shopify CLI): LVNDR records and reverses, it does not
 block.
 
 Runs and capture: a run started by a key with `undo` is catch-all (`capture: "all-unattributed"`):
@@ -59,7 +59,7 @@ calling a run clean, poll `lvndr_get_run` / `GET /api/v1/runs/:id` about every 2
 
 ## 3. Hear about trouble
 
-lvndr raises an anomaly alert when one actor changes at least the shop's threshold of records
+LVNDR raises an anomaly alert when one actor changes at least the shop's threshold of records
 within its window (default 10 in 10 minutes; both are set in **Settings > Alerts**). Actors that
 look like agents, CLIs or automation trip it at half the threshold (minimum 3); **Settings > Treat
 these as agents** adds your own. Alerts need a plan that includes them (Growth, Scale and
@@ -67,7 +67,7 @@ development stores). They appear as a banner on the change log, by email when an
 set, and by webhook. An alert whose burst you undo as a batch, run or rollback is marked resolved.
 
 **Alert webhook.** In **Settings > Alert webhook**, set an https URL and generate a signing
-secret. lvndr POSTs each new or growing burst as JSON with `X-Lvndr-Event: alert.burst` and, once a
+secret. LVNDR POSTs each new or growing burst as JSON with `X-Lvndr-Event: alert.burst` and, once a
 secret exists, `X-Lvndr-Signature: sha256=<hex>`, an HMAC-SHA256 of the raw body with that secret:
 
 ```json
@@ -103,7 +103,7 @@ chat, or call `lvndr batch <anchorChangeId>` to list the burst.
    previews, prints the preview and writes it in one go.
 
    Always read the preview. `conflict` means the field changed again later (someone may have
-   fixed it already); `unsupported` means lvndr cannot write that field and shows the earlier
+   fixed it already); `unsupported` means LVNDR cannot write that field and shows the earlier
    value for a manual fix. A rollback also reverts other people's changes after the point.
    Add `--reason` so the audit log says why.
 4. **Check the result.** Exit code 2 means partial or failed: read each result's `detail` and
@@ -115,7 +115,7 @@ chat, or call `lvndr batch <anchorChangeId>` to list the burst.
 
 ## Limits to tell people about
 
-- Themes are tracked but not written back; lvndr shows the earlier value for a manual restore.
+- Themes are tracked but not written back; LVNDR shows the earlier value for a manual restore.
 - Orders, customers and other protected data are not tracked.
 - An undone delete comes back with a new id. A rebuilt product has no media, inventory
   quantities or sales-channel publication; a deleted theme cannot be rebuilt.

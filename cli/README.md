@@ -1,8 +1,8 @@
-# lvndr CLI
+# LVNDR CLI
 
 The command line for [lvndr](https://github.com/kasazen/lvndr-agent), the store time machine for
 Shopify: the change log, undo by change, batch or run, restore points and rollback, anomaly
-alerts and agent runs. One file, no dependencies, Node 20 or newer. It talks to the lvndr REST API
+alerts and agent runs. One file, no dependencies, Node 20 or newer. It talks to the LVNDR REST API
 (`/api/v1`) with an API key.
 
 ## Install
@@ -13,14 +13,14 @@ npm i -g lvndr            # or install the `lvndr` command
 ```
 
 From a checkout of [kasazen/lvndr-agent](https://github.com/kasazen/lvndr-agent): `node cli/lvndr.mjs <command>`
-(in the lvndr app repository the same file is `agent-kit/cli/lvndr.mjs`).
+(in the LVNDR app repository the same file is `agent-kit/cli/lvndr.mjs`).
 
 ## Log in
 
-Create a key in the app: **lvndr > Settings > Agents & API** (starts with `lv_`, shown once). A
+Create a key in the app: **LVNDR > Settings > Agents & API** (starts with `lv_`, shown once). A
 key has scopes: `read`, `undo`, `rollback`, `export`. New keys get `read` and `undo`; tick
 `rollback` (roll the store back to a restore point) and `export` (download the change log) when
-the key needs them. Marking a restore point and starting a run need only `read`. The API, MCP and this CLI are included on every lvndr plan and free on development
+the key needs them. Marking a restore point and starting a run need only `read`. The API, MCP and this CLI are included on every LVNDR plan and free on development
 stores; requests per minute per key follow the plan (reads/writes: Starter 60/10, Growth 120/20,
 Scale 300/60, development stores 120/20 once billing is on; during early access every store gets
 the top rate, 300/60).
@@ -156,7 +156,7 @@ interval.
 | 5 | Rate limited (429) after retries |
 | 6 | Network: the app could not be reached |
 | 7 | Conflict (409): `plan_changed` (preview again) or an undo already running |
-| 8 | Plan required (402): the store's lvndr plan does not include the API |
+| 8 | Plan required (402): the store's LVNDR plan does not include the API |
 
 `guard` exits with the wrapped command's exit code.
 
@@ -185,7 +185,7 @@ cm9ch00000000000000000001  2026-11-13 10:02:11 PRODUCT    update The Minimal Sno
 To preview the undo:  lvndr run undo cm9run0000000000000000001   (it prints the --run --plan-hash line that runs it)
 ```
 
-Changes made by other tools are tagged to the run by the server; writes made through the lvndr
+Changes made by other tools are tagged to the run by the server; writes made through the LVNDR
 API inside the command (for example a nested `lvndr` call) carry `X-Lvndr-Run-Id` from
 `LVNDR_RUN_ID`. If changes show up late, `lvndr run show <id>` lists them again.
 

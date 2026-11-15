@@ -1,25 +1,25 @@
-# lvndr agent kit
+# LVNDR agent kit
 
 Everything an AI agent needs to change a Shopify store safely with
 [lvndr](https://lvndr.toolfora.com/developers), the store time machine for Shopify:
 the MCP server connection, the `lvndr` skill, plugins for Claude Code, Cursor and Codex, a Cursor
 rule, the MCP registry entry and the zero-dependency `lvndr` CLI.
 
-lvndr records changes to the parts of a store it tracks (products, variants, inventory,
+LVNDR records changes to the parts of a store it tracks (products, variants, inventory,
 collections, pages, blogs and posts, media, publication, metafields and definitions, menus,
 themes), says who made each one as far as Shopify reveals it, and puts it back with a preview
 first. Themes are tracked but not written back; orders and customers are not tracked. An agent starts a **run** with a restore point before it
 writes; afterwards it lists exactly what the run changed and undoes the whole run, one batch or one
-field. The lvndr Shopify app must be installed on the store. This repository holds no app source.
+field. The LVNDR Shopify app must be installed on the store. This repository holds no app source.
 
 - Developer page: <https://lvndr.toolfora.com/developers>
 - For language models: <https://lvndr.toolfora.com/llms.txt>
 - OpenAPI: <https://lvndr.toolfora.com/api/v1/openapi.json>
 - Operator guide: [`docs/AGENT-PLAYBOOK.md`](docs/AGENT-PLAYBOOK.md)
 
-## Step 0: install lvndr on the store
+## Step 0: install LVNDR on the store
 
-Install the lvndr Shopify app on the store and wait for its first snapshot (the app's change log
+Install the LVNDR Shopify app on the store and wait for its first snapshot (the app's change log
 shows the progress; a few minutes for most catalogues). Then connect your agent and call
 `lvndr_status` (CLI: `lvndr status`) to confirm which store it reached.
 
@@ -29,14 +29,14 @@ MCP endpoint: `https://lvndr.toolfora.com/mcp` (Streamable HTTP).
 
 The first option for every client is keyless: give it only the URL, and it signs in through the
 Shopify admin with OAuth (you pick the store and approve the scopes). The second option is an API
-key: create one in **lvndr > Settings > Agents & API** (starts with `lv_`, shown once), export
+key: create one in **LVNDR > Settings > Agents & API** (starts with `lv_`, shown once), export
 it, and send it as `Authorization: Bearer <key>`:
 
 ```sh
 export LVNDR_API_KEY=lv_...
 ```
 
-API access is included on every lvndr plan and free on development stores. New keys can read
+API access is included on every LVNDR plan and free on development stores. New keys can read
 and undo; rollback and export are opt-in per key.
 
 ## Claude Code
@@ -152,7 +152,7 @@ The skill follows the [Agent Skills](https://agentskills.io/specification) forma
 | `.claude-plugin/` | Claude Code plugin and marketplace manifests |
 | `.cursor-plugin/` | Cursor plugin manifest and its MCP config |
 | `.codex-plugin/` | Codex plugin manifest |
-| `.mcp.json` | The lvndr HTTP MCP server, URL only (OAuth sign-in; no secrets) |
+| `.mcp.json` | The LVNDR HTTP MCP server, URL only (OAuth sign-in; no secrets) |
 | `skills/lvndr/` | The safe-change skill and its references |
 | `rules/lvndr.mdc` | Cursor rule (opt-in) |
 | `cli/` | The `lvndr` npm package |
@@ -161,5 +161,5 @@ The skill follows the [Agent Skills](https://agentskills.io/specification) forma
 
 ## License
 
-MIT, see [`LICENSE`](LICENSE). The lvndr app itself is a hosted service and is not part of this
+MIT, see [`LICENSE`](LICENSE). The LVNDR app itself is a hosted service and is not part of this
 repository.

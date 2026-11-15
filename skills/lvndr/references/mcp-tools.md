@@ -1,4 +1,4 @@
-# lvndr MCP tools
+# LVNDR MCP tools
 
 Endpoint: `POST https://lvndr.toolfora.com/mcp` (Streamable HTTP, JSON-RPC:
 `initialize`, `tools/list`, `tools/call`, `ping`). Auth: MCP OAuth (the client signs in through
@@ -8,7 +8,7 @@ grants that ask for no scope get `read` and `undo`, so `lvndr_rollback` needs a 
 gave `rollback` on purpose.
 
 A tool that needs a scope the key lacks: a Settings key gets a tool result with `isError: true`
-and the text "This key lacks the undo scope; create a key with Undo in lvndr Settings > Agents &
+and the text "This key lacks the undo scope; create a key with Undo in LVNDR Settings > Agents &
 API"; an OAuth token gets HTTP 403 with an `insufficient_scope` challenge so the client can ask
 for the scope. A rate-limited call is likewise "Rate limited; retry in N s" (Settings key) or
 HTTP 429 (OAuth).
@@ -32,7 +32,7 @@ parentheses).
 | `lvndr_preview_undo_batch` | Plan for undoing one actor's batch. Returns the token for `lvndr_undo_batch` | `anchorChangeId`, `reason`, `runId` |
 | `lvndr_preview_rollback` | What rolling back to a restore point would undo. Returns the token for `lvndr_rollback` | `pointId` |
 | `lvndr_list_alerts` | Anomaly alerts (bursts by one actor) | `status` (open, dismissed, resolved, all), `limit` |
-| `lvndr_get_run` | One agent run with the changes tagged to it, plus `attributedThrough` and `pendingDeliveries` (how far lvndr has caught up) | `id`, `limit`, `cursor` |
+| `lvndr_get_run` | One agent run with the changes tagged to it, plus `attributedThrough` and `pendingDeliveries` (how far LVNDR has caught up) | `id`, `limit`, `cursor` |
 | `lvndr_list_runs` | Recent agent runs | `limit`, `openOnly` |
 | `lvndr_get_job` | Progress of a background undo job (from `lvndr_undo_run`, `lvndr_undo_batch` or `lvndr_rollback`): status (queued, running, done, partial, failed), total, done, failed, skipped, remaining, error, one result per change | `id` (the job id) |
 

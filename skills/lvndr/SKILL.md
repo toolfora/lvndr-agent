@@ -1,8 +1,8 @@
 ---
 name: lvndr
-description: Safety net for changing a Shopify store through lvndr's change log. Use whenever you change a Shopify store with any tool (Admin API, Shopify CLI, store MCP, an app, a CSV import): mark a restore point or start a run first, verify afterwards what actually changed and who changed it, and undo precisely by change, batch, run or restore point with a preview before any write. Also use when asked what changed in a store, who changed a product, price, collection, page, menu or theme, or to roll a store back.
+description: Safety net for changing a Shopify store through LVNDR's change log. Use whenever you change a Shopify store with any tool (Admin API, Shopify CLI, store MCP, an app, a CSV import): mark a restore point or start a run first, verify afterwards what actually changed and who changed it, and undo precisely by change, batch, run or restore point with a preview before any write. Also use when asked what changed in a store, who changed a product, price, collection, page, menu or theme, or to roll a store back.
 license: MIT
-compatibility: Needs the lvndr Shopify app installed on the store, and either an MCP client that signs in with OAuth or an lvndr API key (LVNDR_API_KEY); every lvndr plan includes API access. Works through the lvndr MCP server or the `lvndr` CLI (Node 20+); network access to the lvndr app URL.
+compatibility: Needs the LVNDR Shopify app installed on the store, and either an MCP client that signs in with OAuth or an LVNDR API key (LVNDR_API_KEY); every LVNDR plan includes API access. Works through the LVNDR MCP server or the `lvndr` CLI (Node 20+); network access to the LVNDR app URL.
 metadata:
   author: HereNow Labs
   version: "0.1.0"
@@ -10,7 +10,7 @@ metadata:
 
 # lvndr: change a Shopify store safely
 
-lvndr records changes to the parts of a Shopify store it tracks (products, variants, inventory,
+LVNDR records changes to the parts of a Shopify store it tracks (products, variants, inventory,
 collections, pages, blogs and posts, media, sales-channel publication, metafields and definitions,
 menus, themes) with a before/after diff and the best attribution Shopify allows, and can put most
 of it back (themes are tracked but never written; see Limits).
@@ -28,7 +28,7 @@ Follow these steps every time you are about to write to a store, whatever tool d
 
 1. **Check access.** `lvndr_status` (CLI: `lvndr status`). If it fails with auth (CLI exit 3),
    stop and tell the user the key is missing, revoked or expired, or the app is not installed on
-   the store. A 402 (CLI exit 8) means the store has no lvndr plan that includes the API. New keys carry `read` and `undo`; `rollback` and `export` are opt-in.
+   the store. A 402 (CLI exit 8) means the store has no LVNDR plan that includes the API. New keys carry `read` and `undo`; `rollback` and `export` are opt-in.
 2. **Start a run with a restore point.** `lvndr_start_run` with `agent` (your name),
    `task` (one line: what you are about to do) and `markRestorePoint: true`. Keep the returned
    run id. CLI: `lvndr run start --agent <name> --task "<task>"` (prints the id; also
@@ -41,11 +41,11 @@ Follow these steps every time you are about to write to a store, whatever tool d
    end it promptly; `client` (an OAuth token without `undo`, or a `clientId` that is your own OAuth
    client id) means only your OAuth client's changes; `none` (a Settings key without `undo`) means
    nothing is tagged, so verify with `lvndr_search_changes` by `since` instead of by `runId`.
-3. **Make the change** with whatever tool the task needs. When your writes go through the lvndr
+3. **Make the change** with whatever tool the task needs. When your writes go through the LVNDR
    API or CLI, send the run id (`X-Lvndr-Run-Id`, or `LVNDR_RUN_ID` in the environment) so they
    are tagged to the run.
 4. **End the run.** `lvndr_end_run` (CLI: `lvndr run end`).
-5. **Verify, once lvndr has caught up.** Changes are tagged within about 4 minutes (collection rules,
+5. **Verify, once LVNDR has caught up.** Changes are tagged within about 4 minutes (collection rules,
    SEO, menus and themes up to 10, from a 10-minute check). Poll `lvndr_get_run` (CLI:
    `lvndr run show <id> --json`) about every 20 seconds until `attributedThrough` is after your
    last write and `pendingDeliveries` is 0; do not judge the run from an earlier read. Then compare
@@ -92,17 +92,17 @@ Attribution has tiers and every change says which: `exact` (Shopify's admin even
 the staff member or app, for creates, deletes, publishes and status changes), `channel` (only
 the channel is known), `inferred` (a labelled guess for field edits, metafields, menus and
 themes, which Shopify never attributes) and `unknown` (no evidence at all yet). `unknown` is
-common: most plain field edits arrive with no actor and stay unknown until lvndr can guess, or
+common: most plain field edits arrive with no actor and stay unknown until LVNDR can guess, or
 until an open catch-all run adopts them. Report the tier; never present an inferred actor as
-certain, and never read `unknown` as "nobody". lvndr's own undos are always `exact` with name
+certain, and never read `unknown` as "nobody". LVNDR's own undos are always `exact` with name
 `lvndr undo`, and never join a run or a batch.
 
 ## Failure handling
 
 | What you see | What to do |
 |---|---|
-| 401, 403 (CLI exit 3), or a tool result "This key lacks the ... scope" | Stop. Key missing, revoked or expired, a scope missing (read, undo, rollback, export), or 403 `not_installed` (the app is not installed on the store). Tell the user; a key with the scope is made in lvndr Settings > Agents & API. |
-| 402 (CLI exit 8) | The store has no active lvndr plan with the API. Tell the user. |
+| 401, 403 (CLI exit 3), or a tool result "This key lacks the ... scope" | Stop. Key missing, revoked or expired, a scope missing (read, undo, rollback, export), or 403 `not_installed` (the app is not installed on the store). Tell the user; a key with the scope is made in LVNDR Settings > Agents & API. |
+| 402 (CLI exit 8) | The store has no active LVNDR plan with the API. Tell the user. |
 | 400 `plan_required` | You sent a write without the preview's `planHash`. Preview, show it, then send the hash. |
 | 409 `plan_changed` (CLI exit 7), or a job `error` starting `plan_changed` | The changes to undo moved since the preview. Preview again and show the user the new plan. |
 | 404 (CLI exit 4) | Wrong id, or a change older than the plan's retention. Search again. |
@@ -110,13 +110,13 @@ certain, and never read `unknown` as "nobody". lvndr's own undos are always `exa
 | Network error (CLI exit 6) | Retry once; writes are idempotent per `Idempotency-Key`. |
 | Undo or job `partial` or `failed` (CLI exit 2) | Read each result's `detail`; do not retry blindly. Re-preview: the record may have changed again (a `conflict`). |
 | Preview item `conflict` | The field was changed again after this change. Only overwrite with `includeConflicts` when the user agrees. |
-| Preview item `unsupported` | lvndr cannot write that field; tell the user and show the earlier value for a manual fix. |
+| Preview item `unsupported` | LVNDR cannot write that field; tell the user and show the earlier value for a manual fix. |
 | No changes after your write | Check `attributedThrough` and `pendingDeliveries` on the run and keep polling. Collection rules, SEO, menus and themes take up to 10 minutes; alt-text edits wait for the daily sweep. With `capture` `none`, search by `since` instead. |
 
 ## Limits
 
 - Themes are tracked (settings and template JSON) but never written back: Shopify requires an
-  exemption for theme writes. lvndr shows the earlier value for a manual restore.
+  exemption for theme writes. LVNDR shows the earlier value for a manual restore.
 - Orders, customers and other protected data are out of scope: not tracked, not undoable.
 - An undone delete is rebuilt from the last snapshot with a **new id**. A rebuilt product has
   its options, variants, metafields and manual-collection memberships, but no media, inventory

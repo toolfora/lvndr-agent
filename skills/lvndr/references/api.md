@@ -1,4 +1,4 @@
-# lvndr REST API and CLI
+# LVNDR REST API and CLI
 
 Base URL: `https://lvndr.toolfora.com/api/v1` (set `LVNDR_API_URL` to the app
 URL, without `/api/v1`, for another deployment). OpenAPI: `GET /api/v1/openapi.json` (no auth).
@@ -8,7 +8,7 @@ Human docs: `/developers`. For language models: `/llms.txt`.
 
 | Header | Meaning |
 |---|---|
-| `Authorization: Bearer lv_...` | API key from lvndr > Settings > Agents & API. Scopes: `read`, `undo`, `rollback`, `export` (below). |
+| `Authorization: Bearer lv_...` | API key from LVNDR > Settings > Agents & API. Scopes: `read`, `undo`, `rollback`, `export` (below). |
 | `X-Lvndr-Agent: <name>` | Who is writing (agent, script, CLI). Shown in the change log and audit log. |
 | `X-Lvndr-Run-Id: <runId>` | Tag this write to an open run. Must name a run on the same shop. |
 | `Idempotency-Key: <uuid>` | On POST. Replayed for 24 h; the same key with another body is 409. |
@@ -139,4 +139,4 @@ is still queued or running returns that job. The dry run plans the newest 50 cha
 | 5 | Rate limited after retries |
 | 6 | Network: could not reach the app |
 | 7 | Conflict (409): `plan_changed` (preview again) or an undo already running |
-| 8 | Plan required (402): the store's lvndr plan does not include the API |
+| 8 | Plan required (402): the store's LVNDR plan does not include the API |

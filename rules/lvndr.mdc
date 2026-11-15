@@ -1,9 +1,9 @@
 ---
-description: Changing a Shopify store (Admin API, Shopify CLI, store MCP, imports). Mark a restore point first with lvndr, verify what changed, undo precisely.
+description: Changing a Shopify store (Admin API, Shopify CLI, store MCP, imports). Mark a restore point first with LVNDR, verify what changed, undo precisely.
 alwaysApply: false
 ---
 
-# Changing a Shopify store with lvndr as the safety net
+# Changing a Shopify store with LVNDR as the safety net
 
 Before any write to a Shopify store:
 
