@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 (2026-11-15): undo only what went wrong
+
+- `lvndr_undo` takes `fields` (paths from the preview's `items[].path`): put back one variant's
+  price without touching the description edited in the same change. REST `POST /changes/:id/undo`
+  takes `fields`; the CLI takes `--field <path>` (repeatable) and lists each field's path.
+- Runs, batches and rollbacks can be narrowed: `fieldKinds` (e.g. `["Price"]`, from the preview's
+  new `kinds`) and `excludeChangeIds`, on the previews and the writes, over MCP and REST; the CLI
+  takes `--only <kind>` and `--exclude <changeId>`. Whatever is left out stays undoable later.
+- The CLI ships on npm as `@toolfora/lvndr`; the command is still `lvndr`.
+
 ## Unreleased (2026-11-14)
 
 - Every store write is bound to a preview: `lvndr_undo` needs a `confirmation_token` for every key

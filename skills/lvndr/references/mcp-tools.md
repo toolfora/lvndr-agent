@@ -28,9 +28,9 @@ parentheses).
 | `lvndr_get_batch` | Everything one actor did around a change (no gap over 10 minutes) | `anchorChangeId` (any change in the batch) |
 | `lvndr_list_restore_points` | Restore points, newest first; the daily check's points only with `kind` sweep or all | `limit`, `cursor`, `kind` (manual, burst, app_install, sweep, all) |
 | `lvndr_preview_undo` | Per-field plan for undoing one change: ready, conflict, noop, unsupported, with current and target values. `items` has the same fields in merchant words (field label, current and target as text). Returns the `confirmation_token` for `lvndr_undo` | `id`, `includeConflicts` |
-| `lvndr_preview_undo_run` | Plan for undoing every change tagged with a run (the newest 50 planned). Returns the token for `lvndr_undo_run` | `id`, `reason`, `runId` (your current run, not the one being undone) |
-| `lvndr_preview_undo_batch` | Plan for undoing one actor's batch. Returns the token for `lvndr_undo_batch` | `anchorChangeId`, `reason`, `runId` |
-| `lvndr_preview_rollback` | What rolling back to a restore point would undo. Returns the token for `lvndr_rollback` | `pointId` |
+| `lvndr_preview_undo_run` | Plan for undoing every change tagged with a run (the newest 50 planned). Returns the token for `lvndr_undo_run` and `kinds` (each kind of field, e.g. Price) | `id`, `reason`, `runId` (your current run, not the one being undone), `excludeChangeIds`, `fieldKinds` (narrowing: see below) |
+| `lvndr_preview_undo_batch` | Plan for undoing one actor's batch. Returns the token for `lvndr_undo_batch` and `kinds` | `anchorChangeId`, `reason`, `runId`, `excludeChangeIds`, `fieldKinds` (narrowing: see below) |
+| `lvndr_preview_rollback` | What rolling back to a restore point would undo. Returns the token for `lvndr_rollback` and `kinds` | `pointId`, `excludeChangeIds`, `fieldKinds` (narrowing: see below) |
 | `lvndr_list_alerts` | Anomaly alerts (bursts by one actor) | `status` (open, dismissed, resolved, all), `limit` |
 | `lvndr_get_run` | One agent run with the changes tagged to it, plus `attributedThrough` and `pendingDeliveries` (how far LVNDR has caught up) | `id`, `limit`, `cursor` |
 | `lvndr_list_runs` | Recent agent runs | `limit`, `openOnly` |
@@ -43,10 +43,10 @@ parentheses).
 | `lvndr_start_run` | read | Open a run before changing the store; marks a restore point by default. Returns `capture`, `captureNote` and `warning` (set when the run will collect nothing: tell the user) | `task` (recommended), `agent`, `clientId` (used only if it is the key's own OAuth client id), `markRestorePoint` (default true) |
 | `lvndr_end_run` | read | Close the run when done | `id` |
 | `lvndr_mark_restore_point` | read | Mark a point to roll back to | `label`, `reason`, `runId` |
-| `lvndr_undo` | undo | Undo one change (snapshot first, then write) | `id`, `confirmation_token` (required, from lvndr_preview_undo), `includeConflicts` (must match the preview), `reason`, `runId` |
-| `lvndr_undo_run` | undo | Undo every change tagged with a run, newest first. Returns a background `job` | `id`, `confirmation_token` (required, from lvndr_preview_undo_run), `reason`, `runId` |
-| `lvndr_undo_batch` | undo | Undo one actor's batch, newest first. Returns a background `job` | `anchorChangeId`, `confirmation_token` (required, from lvndr_preview_undo_batch), `reason`, `runId` |
-| `lvndr_rollback` | rollback | Undo everything after a restore point, newest first. Returns a background `job` | `pointId`, `confirmation_token` (required, from lvndr_preview_rollback), `reason`, `runId` |
+| `lvndr_undo` | undo | Undo one change (snapshot first, then write), or only some of its fields | `id`, `confirmation_token` (required, from lvndr_preview_undo), `includeConflicts` (must match the preview), `fields` (paths from the preview's `items[].path`; omit for every ready field), `reason`, `runId` |
+| `lvndr_undo_run` | undo | Undo every change tagged with a run, newest first. Returns a background `job` | `id`, `confirmation_token` (required, from lvndr_preview_undo_run), `reason`, `runId`, `excludeChangeIds`, `fieldKinds` (narrowing: see below) |
+| `lvndr_undo_batch` | undo | Undo one actor's batch, newest first. Returns a background `job` | `anchorChangeId`, `confirmation_token` (required, from lvndr_preview_undo_batch), `reason`, `runId`, `excludeChangeIds`, `fieldKinds` (narrowing: see below) |
+| `lvndr_rollback` | rollback | Undo everything after a restore point, newest first. Returns a background `job` | `pointId`, `confirmation_token` (required, from lvndr_preview_rollback), `reason`, `runId`, `excludeChangeIds`, `fieldKinds` (narrowing: see below) |
 | `lvndr_dismiss_alert` | undo | Dismiss an alert after the user has looked at it (a read-only key cannot) | `id` |
 
 Every store write needs the `confirmation_token` from its preview: 10 minutes, single use, bound
@@ -119,3 +119,11 @@ the new plan.
   and `results[]` with `changeId`, `status` and `detail`. One job covers up to 500 changes; when
   `remaining` is above 0, preview and run again for the rest.
 - An undo is itself recorded as a change ("lvndr undo") and can be undone.
+
+## Narrowing an undo
+
+Undo only what went wrong. On `lvndr_undo`, `fields` takes paths from the preview's `items[].path`
+(one variant's price, not the description). On a run, batch or rollback, `fieldKinds` takes kinds
+from the preview's `kinds[].kind` ("Price", "Tags") and `excludeChangeIds` leaves changes out.
+Preview with the same arguments to show the merchant the narrowed plan; the confirmation token
+covers any subset of what it previewed. Whatever is left out stays undoable later.

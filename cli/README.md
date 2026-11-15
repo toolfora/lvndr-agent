@@ -53,6 +53,18 @@ Every write is bound to a plan someone saw. The undo commands preview by default
 ```sh
 lvndr undo cm3abc                               # preview; ends with the line below
 lvndr undo cm3abc --run --plan-hash q3Xl0c2V    # write exactly that plan
+lvndr undo cm3abc --field 'variants[ProductVariant/42].price'   # preview putting back only that field
+```
+
+`--field <path>` (repeat it for more) puts back only those fields of the change; the preview lists
+each field's path. The same `--plan-hash` covers any subset of what it previewed.
+
+For a batch, a run or a rollback, `--only <kind>` (repeatable) puts back only those kinds of field
+as the preview names them (`--only Price`), and `--exclude <changeId>` leaves a change out:
+
+```sh
+lvndr run undo --only Price                       # preview: only the prices the run changed
+lvndr run undo --run --plan-hash q3Xl0c2V --only Price
 ```
 
 `--run` without `--plan-hash` writes nothing and fails with `preview first: lvndr undo <id>`. The
@@ -77,7 +89,7 @@ prints one command's usage.
 | `lvndr changes [filters]` | Changes, newest first. Filters: `--since`, `--until`, `--type`, `--action`, `--resource-id`, `--actor`, `--q`, `--hide-undos`, `--run-id`, `--limit`, `--cursor` |
 | `lvndr change <id>` | One change with its diff and attribution tier |
 | `lvndr history <gid\|Type-digits>` | A record's stored versions and changes (`Product-123`, `gid://shopify/Product/123`) |
-| `lvndr undo <id> [--run --plan-hash h \| --yes] [--include-conflicts] [--reason text]` | Preview the undo of one change, or write the previewed plan |
+| `lvndr undo <id> [--run --plan-hash h \| --yes] [--field path]... [--include-conflicts] [--reason text]` | Preview the undo of one change (or only some of its fields), or write the previewed plan |
 | `lvndr batch <id>` | Everything the same actor did around a change, no gap over 10 minutes |
 | `lvndr undo-batch <id> [--run --plan-hash h \| --yes] [--reason text]` | Preview or undo that batch, newest first (a job) |
 | `lvndr points [--all \| --kind k] [--limit n] [--cursor c]` | Restore points (the daily check's only with `--all`) |

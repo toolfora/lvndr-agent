@@ -29,7 +29,7 @@ import { delimiter, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 export const DEFAULT_URL = "https://lvndr.toolfora.com";
 export const EXIT = Object.freeze({ OK: 0, USAGE: 1, UNDO_FAILED: 2, AUTH: 3, NOT_FOUND: 4, RATE_LIMITED: 5, NETWORK: 6, CONFLICT: 7, PLAN_REQUIRED: 8 });
 
@@ -48,11 +48,34 @@ const BOOLEAN_FLAGS = new Set([
 const VALUE_FLAGS = new Set([
   "key", "url", "profile", "agent", "run-id", "reason", "task", "client-id", "format", "since", "until",
   "out", "limit", "cursor", "type", "action", "resource-id", "actor", "q", "status", "wait", "timeout",
-  "plan-hash", "kind",
+  "plan-hash", "kind", "field", "only", "exclude",
 ]);
+/** Value flags that may be given more than once; they collect into an array. */
+const REPEATABLE_FLAGS = new Set(["field", "only", "exclude"]);
 const SHORT_FLAGS = { h: "help", q: "quiet", v: "version" };
 
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+/**
+ * --only <kind> / --exclude <changeId> (both repeatable): narrow a batch, run or rollback to some
+ * kinds of field ("Price") and leave changes out. Returns the body fields and the flags to echo.
+ */
+function narrowing(flags) {
+  const body = {};
+  if (flags.only?.length) body.fieldKinds = flags.only;
+  if (flags.exclude?.length) body.excludeChangeIds = flags.exclude;
+  const echo = [...(flags.only ?? []).map((k) => ` --only ${shellQuote(k)}`), ...(flags.exclude ?? []).map((x) => ` --exclude ${shellQuote(x)}`)].join("");
+  return { body, echo };
+}
+
+/** After a multi-change preview: the kinds of field in it, and how to put back only some. */
+function kindHints(r, flags, command) {
+  const kinds = r?.kinds ?? r?.preview?.kinds ?? [];
+  if (flags.only?.length || kinds.filter((k) => k.ready > 0).length < 2) return flags.only?.length ? [`only: ${flags.only.join(", ")}`] : [];
+  return [`Kinds of field: ${kinds.filter((k) => k.ready > 0).map((k) => `${k.kind} (${k.ready})`).join(", ")}`, `To put back only some: ${command} --only ${shellQuote(kinds[0].kind)}  (repeat --only; --exclude <changeId> leaves a change out)`];
+}
+
+/** A shell word for a printed command line: plain when safe, else single-quoted. */
+const shellQuote = (s) => (/^[A-Za-z0-9_./:@=-]+$/.test(String(s)) ? String(s) : `'${String(s).replace(/'/g, `'\\''`)}'`);
 
 /** argv (without node and script) -> { command, args, flags, passthrough }. Throws CliError(1). */
 export function parseArgs(argv) {
@@ -81,7 +104,8 @@ export function parseArgs(argv) {
           value = argv[++i];
           if (value === undefined || value.startsWith("--")) throw new CliError(`--${name} needs a value`);
         }
-        flags[camel(name)] = value;
+        if (REPEATABLE_FLAGS.has(name)) (flags[camel(name)] ??= []).push(value);
+        else flags[camel(name)] = value;
       } else {
         throw new CliError(`unknown flag --${name}`);
       }
@@ -511,7 +535,7 @@ async function confirm(question, io) {
  *   --yes                   a person at a terminal: preview, print it once, ask, then write it
  * A preview with nothing to write says "Nothing to undo" and prints no write command.
  */
-async function writeFlow({ flags, io, preview, write, previewCommand, runCommand }) {
+async function writeFlow({ flags, io, preview, write, previewCommand, runCommand, extra = () => [] }) {
   if (flags.yes) {
     if (!(io.stdin ?? process.stdin).isTTY) {
       throw new CliError(`--yes is for a person at a terminal. Preview with \`${previewCommand}\`, show the plan, then pass the --plan-hash it prints.`);
@@ -531,7 +555,7 @@ async function writeFlow({ flags, io, preview, write, previewCommand, runCommand
   const r = await preview();
   if (nothingToUndo(r)) return { result: r, human: [...previewLines(r), "Nothing to undo; nothing was written."] };
   const hint = r?.planHash ? [`To run exactly this plan: ${runCommand} --plan-hash ${r.planHash}`] : [];
-  return { result: r, human: [...previewLines(r), "preview only; nothing was written.", ...hint] };
+  return { result: r, human: [...previewLines(r), "preview only; nothing was written.", ...hint, ...extra(r)] };
 }
 
 
@@ -552,21 +576,21 @@ export const USAGE = Object.freeze({
   history: "history <gid|Type-digits> [--cursor c]",
   batch: "batch <id>",
   points: "points [--all | --kind manual|burst|app_install|sweep] [--limit 50] [--cursor c]",
-  preview: "preview <pointId>",
+  preview: "preview <pointId> [--only <kind>]... [--exclude <changeId>]...",
   alerts: "alerts [--all] [--limit 50]",
   export: "export [--format csv|json] [--since 7d] [--until ISO] [--out file]",
   openapi: "openapi",
-  undo: "undo <id> [--include-conflicts] [--reason text]  |  undo <id> --run --plan-hash <h>  |  undo <id> --yes",
-  "undo-batch": "undo-batch <id> [--reason text]  |  undo-batch <id> --run --plan-hash <h>  |  undo-batch <id> --yes",
+  undo: "undo <id> [--field <path>]... [--include-conflicts] [--reason text]  |  undo <id> --run --plan-hash <h> [--field <path>]...  |  undo <id> --yes",
+  "undo-batch": "undo-batch <id> [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  undo-batch <id> --run --plan-hash <h> [--only <kind>]...  |  undo-batch <id> --yes",
   mark: "mark <label...> [--reason text]",
-  rollback: "rollback <pointId> --confirm --plan-hash <h> [--reason text]  |  rollback <pointId> --yes",
+  rollback: "rollback <pointId> --confirm --plan-hash <h> [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  rollback <pointId> --yes",
   job: "job <id>",
   dismiss: "dismiss <alertId>",
   "run start": "run start [--agent name] [--task text] [--client-id id] [--no-restore-point]",
   "run end": "run end [id]",
   "run show": "run show [id] [--cursor c]",
   "run list": "run list [--limit 20]",
-  "run undo": "run undo [id] [--reason text]  |  run undo [id] --run --plan-hash <h>  |  run undo [id] --yes",
+  "run undo": "run undo [id] [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  run undo [id] --run --plan-hash <h> [--only <kind>]...  |  run undo [id] --yes",
   guard: "guard [--agent name] [--task text] [--wait 300] -- <command...>",
   login: "login [--key lv_... | --with-token] [--url URL] [--profile name] [--no-verify]",
 });
@@ -585,9 +609,9 @@ const DETAIL = {
   export: "Download the change log as CSV (default) or JSON.",
   openapi: "The API's OpenAPI document.",
   undo:
-    "Without flags: preview the undo of one change (writes nothing) and print the line that runs exactly that plan.\n--run --plan-hash <h>: write the previewed plan; refused (exit 7) if the store moved since or it was already undone.\n--yes: for a person at a terminal: preview, ask Apply? [y/N], then write that plan.",
+    "Without flags: preview the undo of one change (writes nothing) and print the line that runs exactly that plan.\n--field <path> (repeatable): put back only those fields; the preview lists each field's path.\n--run --plan-hash <h>: write the previewed plan; refused (exit 7) if the store moved since or it was already undone.\n--yes: for a person at a terminal: preview, ask Apply? [y/N], then write that plan.",
   "undo-batch":
-    "Without flags: preview undoing one actor's batch around a change.\n--run --plan-hash <h>: queue that plan as a background job and wait for it.\n--yes: for a person at a terminal: preview, ask, then run it.",
+    "Without flags: preview undoing one actor's batch around a change.\n--only <kind> (repeatable): put back only those kinds of field, as the preview lists them (e.g. --only Price).\n--exclude <changeId> (repeatable): leave a change out; it stays undoable.\n--run --plan-hash <h>: queue that plan as a background job and wait for it.\n--yes: for a person at a terminal: preview, ask, then run it.",
   mark: "Mark a restore point now, for example before a bulk job.",
   rollback:
     "Undo every change after a restore point, newest first. Preview first with `lvndr preview <pointId>`, then pass --confirm and the --plan-hash it printed.\n--yes: for a person at a terminal: preview, ask, then roll back.",
@@ -952,13 +976,22 @@ async function dispatch(parsed, io) {
       need(args, 1, USAGE.undo);
       const path = `/changes/${enc(args[0])}/undo`;
       const includeConflicts = !!flags.includeConflicts;
-      const runCommand = `lvndr undo ${args[0]} --run${includeConflicts ? " --include-conflicts" : ""}`;
-      const preview = () => request(ctx, "POST", path, { body: { dryRun: true, includeConflicts, reason: flags.reason } });
+      // --field <path> (repeatable): put back only those fields, e.g. one variant's price.
+      const fields = flags.field?.length ? flags.field : undefined;
+      const fieldArgs = (fields ?? []).map((f) => ` --field ${shellQuote(f)}`).join("");
+      const runCommand = `lvndr undo ${args[0]} --run${includeConflicts ? " --include-conflicts" : ""}${fieldArgs}`;
+      const preview = () => request(ctx, "POST", path, { body: { dryRun: true, includeConflicts, fields, reason: flags.reason } });
       const write = async (planHash) => {
-        const r = await request(ctx, "POST", path, { body: { dryRun: false, includeConflicts, planHash, reason: flags.reason } });
+        const r = await request(ctx, "POST", path, { body: { dryRun: false, includeConflicts, fields, planHash, reason: flags.reason } });
         return { result: r, human: undoResultLines(r), quietIds: [r.undoRunId ?? r.run?.id], exitCode: undoFailed(r) ? EXIT.UNDO_FAILED : EXIT.OK };
       };
-      return writeFlow({ flags, io, preview, write, previewCommand: `lvndr undo ${args[0]}${includeConflicts ? " --include-conflicts" : ""}`, runCommand });
+      // With several fields to put back and no --field, show how to put back only some of them.
+      const extra = (r) => {
+        const ready = (r?.items ?? []).filter((i) => i.status === "ready" || (includeConflicts && i.status === "conflict"));
+        if (fields || ready.length < 2) return fields ? [`only: ${fields.join(", ")}`] : [];
+        return ["To put back only some fields, add --field <path> for each:", ...ready.map((i) => `  --field ${shellQuote(i.path)}   ${i.field}`)];
+      };
+      return writeFlow({ flags, io, preview, write, previewCommand: `lvndr undo ${args[0]}${includeConflicts ? " --include-conflicts" : ""}${fieldArgs}`, runCommand, extra });
     }
     case "batch": {
       need(args, 1, USAGE.batch);
@@ -969,13 +1002,15 @@ async function dispatch(parsed, io) {
     case "undo-batch": {
       need(args, 1, USAGE["undo-batch"]);
       const path = `/batches/${enc(args[0])}/undo`;
+      const n = narrowing(flags);
       return writeFlow({
         flags,
         io,
-        preview: () => request(ctx, "POST", path, { body: { dryRun: true, reason: flags.reason } }),
-        write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { dryRun: false, planHash, reason: flags.reason } }), io, flags),
-        previewCommand: `lvndr undo-batch ${args[0]}`,
-        runCommand: `lvndr undo-batch ${args[0]} --run`,
+        preview: () => request(ctx, "POST", path, { body: { dryRun: true, reason: flags.reason, ...n.body } }),
+        write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { dryRun: false, planHash, reason: flags.reason, ...n.body } }), io, flags),
+        previewCommand: `lvndr undo-batch ${args[0]}${n.echo}`,
+        runCommand: `lvndr undo-batch ${args[0]} --run${n.echo}`,
+        extra: (r) => kindHints(r, flags, `lvndr undo-batch ${args[0]}`),
       });
     }
     case "points": {
@@ -995,25 +1030,27 @@ async function dispatch(parsed, io) {
     }
     case "preview": {
       need(args, 1, USAGE.preview);
-      const r = await request(ctx, "GET", `/restore-points/${enc(args[0])}/preview`);
+      const n = narrowing(flags);
+      const r = await request(ctx, "GET", `/restore-points/${enc(args[0])}/preview`, { query: { kinds: flags.only?.join(","), exclude: flags.exclude?.join(",") } });
       if (nothingToUndo(r)) return { result: r, human: [...previewLines(r), "Nothing to undo after this restore point; nothing was written."] };
-      const hint = `To roll back exactly this: lvndr rollback ${args[0]} --confirm --plan-hash ${r.planHash}`;
-      return { result: r, human: [...previewLines(r), "preview only; nothing was written.", hint] };
+      const hint = `To roll back exactly this: lvndr rollback ${args[0]} --confirm --plan-hash ${r.planHash}${n.echo}`;
+      return { result: r, human: [...previewLines(r), "preview only; nothing was written.", hint, ...kindHints(r, flags, `lvndr preview ${args[0]}`)] };
     }
     case "rollback": {
       need(args, 1, USAGE.rollback);
       const path = `/restore-points/${enc(args[0])}/rollback`;
       if (!flags.confirm && !flags.yes) throw new CliError(`rollback writes to the store. Preview first: lvndr preview ${args[0]} (it prints the --confirm --plan-hash line to run).`);
+      const n = narrowing(flags);
       return writeFlow({
         flags: { ...flags, run: true },
         io,
         preview: async () => {
-          const r = await request(ctx, "GET", `${path.replace(/\/rollback$/, "")}/preview`);
+          const r = await request(ctx, "GET", `${path.replace(/\/rollback$/, "")}/preview`, { query: { kinds: flags.only?.join(","), exclude: flags.exclude?.join(",") } });
           return { ...(r.preview ?? {}), planHash: r.planHash, ...(typeof r.nothingToUndo === "boolean" ? { nothingToUndo: r.nothingToUndo } : {}) };
         },
-        write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { confirm: true, planHash, reason: flags.reason } }), io, flags),
-        previewCommand: `lvndr preview ${args[0]}`,
-        runCommand: `lvndr rollback ${args[0]} --confirm`,
+        write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { confirm: true, planHash, reason: flags.reason, ...n.body } }), io, flags),
+        previewCommand: `lvndr preview ${args[0]}${n.echo}`,
+        runCommand: `lvndr rollback ${args[0]} --confirm${n.echo}`,
       });
     }
     case "job": {
@@ -1105,13 +1142,15 @@ async function dispatch(parsed, io) {
       if (sub === "undo") {
         const runId = currentRun(ctx, id);
         const path = `/runs/${enc(runId)}/undo`;
+        const n = narrowing(flags);
         return writeFlow({
           flags,
           io,
-          preview: () => request(ctx, "POST", path, { body: { dryRun: true, reason: flags.reason } }),
-          write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { dryRun: false, planHash, reason: flags.reason } }), io, flags),
-          previewCommand: `lvndr run undo ${runId}`,
-          runCommand: `lvndr run undo ${runId} --run`,
+          preview: () => request(ctx, "POST", path, { body: { dryRun: true, reason: flags.reason, ...n.body } }),
+          write: async (planHash) => finishQueued(ctx, await request(ctx, "POST", path, { body: { dryRun: false, planHash, reason: flags.reason, ...n.body } }), io, flags),
+          previewCommand: `lvndr run undo ${runId}${n.echo}`,
+          runCommand: `lvndr run undo ${runId} --run${n.echo}`,
+          extra: (r) => kindHints(r, flags, `lvndr run undo ${runId}`),
         });
       }
       const hint = sub ? suggestCommand(sub, ["start", "end", "show", "list", "undo"]) : null;
