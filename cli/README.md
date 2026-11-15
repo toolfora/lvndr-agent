@@ -8,8 +8,8 @@ alerts and agent runs. One file, no dependencies, Node 20 or newer. It talks to 
 ## Install
 
 ```sh
-npx lvndr status          # run without installing
-npm i -g lvndr            # or install the `lvndr` command
+npm i -g @toolfora/lvndr   # once: installs the `lvndr` command
+lvndr status
 ```
 
 From a checkout of [toolfora/lvndr-agent](https://github.com/toolfora/lvndr-agent): `node cli/lvndr.mjs <command>`

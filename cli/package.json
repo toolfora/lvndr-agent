@@ -1,5 +1,5 @@
 {
-  "name": "lvndr",
+  "name": "@toolfora/lvndr",
   "version": "0.1.0",
   "description": "Command line for LVNDR by Toolfora, the Shopify store time machine: change log, undo by change, restore points and agent runs.",
   "type": "module",
@@ -34,5 +34,8 @@
     "url": "https://github.com/toolfora/lvndr-agent/issues"
   },
   "author": "Toolfora (HereNow Labs, Inc.)",
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -123,12 +123,13 @@ Through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote), in
 ## CLI
 
 ```sh
-npx lvndr login                       # paste the key; saved to ~/.config/lvndr/config.json
-npx lvndr status
-npx lvndr changes --since 24h
-npx lvndr undo <changeId>             # preview; prints the --plan-hash to write it
-npx lvndr undo <changeId> --run --plan-hash <hash>   # write exactly that plan
-npx lvndr guard -- shopify store execute --allow-mutations ...   # run + restore point around a command
+npm i -g @toolfora/lvndr          # once: installs the `lvndr` command
+lvndr login                       # paste the key; saved to ~/.config/lvndr/config.json
+lvndr status
+lvndr changes --since 24h
+lvndr undo <changeId>             # preview; prints the --plan-hash to write it
+lvndr undo <changeId> --run --plan-hash <hash>   # write exactly that plan
+lvndr guard -- shopify store execute --allow-mutations ...   # run + restore point around a command
 ```
 
 Every command, flag and exit code: [`cli/README.md`](cli/README.md).

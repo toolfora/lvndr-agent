@@ -19,7 +19,7 @@ You reach it two ways. Prefer MCP when the `lvndr_*` tools are available; otherw
 
 - MCP: server `lvndr` at `https://lvndr.toolfora.com/mcp` (OAuth sign-in, or bearer
   `LVNDR_API_KEY`).
-- CLI: `npx lvndr <command>` (or `lvndr` if installed), key from `LVNDR_API_KEY` or `lvndr login`.
+- CLI: `lvndr <command>` (install once with `npm i -g @toolfora/lvndr`), key from `LVNDR_API_KEY` or `lvndr login`.
   Add `--json` to any command for machine-readable output.
 
 ## The safe workflow

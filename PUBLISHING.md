@@ -52,8 +52,9 @@ npm publish --access public
 rm LICENSE
 ```
 
-If the name `lvndr` is taken, change `name` in `cli/package.json` and every `npx lvndr` in the
-READMEs, skill and the app's help pages.
+The package is scoped, `@toolfora/lvndr` (npm org `toolfora`), because npm refused the bare name
+`lvndr` as too similar to `lunr`. The installed command is still `lvndr`. npm requires 2FA to
+publish: run `npm publish --access public` in a real terminal and approve the browser prompt.
 
 ## 4. Official MCP registry
 

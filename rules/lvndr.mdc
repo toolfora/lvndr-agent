@@ -7,9 +7,9 @@ alwaysApply: false
 
 Before any write to a Shopify store:
 
-1. `lvndr_status` (or `npx lvndr status`). Stop if auth fails.
-2. `lvndr_start_run` with `agent`, `task`, `markRestorePoint: true` (or `npx lvndr run start --agent cursor --task "..."`). Keep the run id.
-   For one shell command: `npx lvndr guard --agent cursor -- <command...>`.
+1. `lvndr_status` (or `lvndr status`; install the CLI once with `npm i -g @toolfora/lvndr`). Stop if auth fails.
+2. `lvndr_start_run` with `agent`, `task`, `markRestorePoint: true` (or `lvndr run start --agent cursor --task "..."`). Keep the run id.
+   For one shell command: `lvndr guard --agent cursor -- <command...>`.
 
 After the write:
 
