@@ -13,8 +13,8 @@ makes, and revoking one key does not stop the others.
 
 | Scopes | Use for | Can |
 |---|---|---|
-| `read` | Reporting agents, dashboards, "what changed?" questions | Read changes, history, batches, restore points, alerts; mark restore points; start and end runs (a run from a read-only key captures nothing unless it is an OAuth token, see below); dismiss alerts |
-| `read` + `undo` | Agents that may fix their own mistakes | Also undo one change, a batch or a run; its runs capture every unattributed change while open |
+| `read` | Reporting agents, dashboards, "what changed?" questions | Read changes, history, batches, restore points, alerts; mark restore points; start and end runs (a run from a read-only key captures nothing unless it is an OAuth token, see below) |
+| `read` + `undo` | Agents that may fix their own mistakes | Also undo one change, a batch or a run, and dismiss alerts; its runs capture every unattributed change while open |
 | `read` + `undo` + `rollback` | Operators who may need to roll the whole store back to a moment | Also roll back to a restore point (marking one needs only `read`) |
 | `export` | Backups and audits | Download the change log as CSV or JSON |
 

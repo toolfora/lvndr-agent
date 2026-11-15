@@ -22,10 +22,12 @@ key has scopes: `read`, `undo`, `rollback`, `export`. New keys get `read` and `u
 `rollback` (roll the store back to a restore point) and `export` (download the change log) when
 the key needs them. Marking a restore point and starting a run need only `read`. The API, MCP and this CLI are included on every lvndr plan and free on development
 stores; requests per minute per key follow the plan (reads/writes: Starter 60/10, Growth 120/20,
-Scale 300/60, development stores 120/20).
+Scale 300/60, development stores 120/20 once billing is on; during early access every store gets
+the top rate, 300/60).
 
 ```sh
-lvndr login                                  # prompts for the key, checks it with GET /me
+lvndr login                                  # prompts for the key (not echoed), checks it with GET /me
+lvndr login --with-token < key.txt           # reads the key from stdin (scripts, CI)
 lvndr login --key lv_... --profile staging --url https://my-tunnel.example.com
 lvndr login --key lv_... --agent nightly-import --no-verify   # save an agent name; skip the GET /me check
 ```
@@ -59,8 +61,9 @@ same holds for `undo-batch <id> --run --plan-hash h`, `run undo [id] --run --pla
 If the store moved since the preview, the write is refused with `plan_changed` (exit 7); preview
 again.
 
-`--yes` is for a person at a terminal: it previews, prints the preview, then writes that exact plan
-in one go. It is refused when stdin is not a terminal, so scripts and agents always preview and
+`--yes` is for a person at a terminal: it previews, prints the preview once, asks `Apply? [y/N]`
+and writes that exact plan only on yes. A preview with nothing to write says "Nothing to undo" and
+prints no write command. It is refused when stdin is not a terminal, so scripts and agents always preview and
 pass `--plan-hash`. It works on `undo`, `undo-batch`, `run undo` and `rollback`.
 
 `undo-batch`, `run undo` and `rollback` writes start a background job on the server and wait for
@@ -77,21 +80,21 @@ prints one command's usage.
 | `lvndr undo <id> [--run --plan-hash h \| --yes] [--include-conflicts] [--reason text]` | Preview the undo of one change, or write the previewed plan |
 | `lvndr batch <id>` | Everything the same actor did around a change, no gap over 10 minutes |
 | `lvndr undo-batch <id> [--run --plan-hash h \| --yes] [--reason text]` | Preview or undo that batch, newest first (a job) |
-| `lvndr points` | Restore points |
+| `lvndr points [--all \| --kind k] [--limit n] [--cursor c]` | Restore points (the daily check's only with `--all`) |
 | `lvndr mark <label...> [--reason text]` | Mark a restore point now |
 | `lvndr preview <pointId>` | What rolling back to a point would undo |
 | `lvndr rollback <pointId> (--confirm --plan-hash h \| --yes) [--reason text]` | Undo everything after the point, newest first (a job); preview with `lvndr preview` |
 | `lvndr job <id>` | One background undo job: status, counts and per-change results |
 | `lvndr alerts [--all]` | Open anomaly alerts (`--all` adds dismissed and resolved ones) |
 | `lvndr dismiss <alertId>` | Dismiss an alert |
-| `lvndr run start --agent <name> [--task text] [--client-id id] [--no-restore-point]` | Open an agent run with a restore point; saves it as the current run for the profile and prints what the run will capture |
+| `lvndr run start [--agent name] [--task text] [--client-id id] [--no-restore-point]` | Open an agent run with a restore point; saves it as the current run for the profile and prints what the run will capture (a WARNING when it captures nothing) |
 | `lvndr run end [id]` | End the run (default: the current run) |
 | `lvndr run show [id]` | The run and the changes tagged to it |
 | `lvndr run list` | Recent runs |
 | `lvndr run undo [id] [--run --plan-hash h \| --yes] [--reason text]` | Preview or undo every change in the run (a job) |
 | `lvndr export [--format csv\|json] [--since] [--until] [--out file]` | Download the change log |
 | `lvndr guard [--agent name] [--task text] [--client-id id] [--no-restore-point] [--wait 300] -- <command...>` | Run a command inside a run with a restore point (below) |
-| `lvndr login [--key k] [--url u] [--profile p] [--agent a] [--no-verify]` | Save a profile (checks the key with `GET /me` unless `--no-verify`) |
+| `lvndr login [--key k \| --with-token] [--url u] [--profile p] [--agent a] [--no-verify]` | Save a profile (checks the key with `GET /me` unless `--no-verify`; the key is not echoed; `--with-token` reads it from stdin) |
 | `lvndr openapi` | Print the OpenAPI document |
 | `lvndr help [command]`, `lvndr <command> --help`, `lvndr --version` | All commands, or one command's usage |
 
@@ -159,12 +162,14 @@ interval.
 
 ## Guard: a run around any command
 
-`guard` starts a run with a restore point, runs the command with inherited stdio and
+`guard` checks the command exists (exit 127 and nothing started when it does not), starts a run
+with a restore point, runs the command with inherited stdio and
 `LVNDR_RUN_ID` / `LVNDR_AGENT` in its environment and ends the run. Changes are tagged within about
 4 minutes (collection rules, SEO, menus and themes up to 10, from a 10-minute check), so it
 then polls `GET /api/v1/runs/:id` about every 20 seconds until `attributedThrough` is after the
 run's end and `pendingDeliveries` is 0, for at most `--wait` seconds (default 300; `--wait 0`
-skips waiting). Then it lists the run's changes and prints the undo line; if attribution has not
+skips waiting), printing each change as it is tagged, the seconds waited and what it still waits
+for. Then it lists the run's changes and prints the undo line; if attribution has not
 caught up by then, it says so and names `lvndr run show <id>`. Its own report goes to stderr (with
 `--json`, one JSON line on stderr), so the command's stdout is untouched. If the run cannot be
 started, the command is not run.

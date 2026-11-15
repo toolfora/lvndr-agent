@@ -15,7 +15,8 @@ Human docs: `/developers`. For language models: `/llms.txt`.
 
 Responses carry `X-RateLimit-Limit` and `X-RateLimit-Remaining`; a 429 carries `Retry-After`.
 Limits are per key per minute and follow the store's plan (reads/writes): Starter 60/10, Growth
-120/20, Scale 300/60, development stores 120/20 (`LVNDR_RATE_READ` / `LVNDR_RATE_WRITE` override
+120/20, Scale 300/60, development stores 120/20 once billing is on; during early access (billing
+not on yet) every store gets the top rate, 300/60 (`LVNDR_RATE_READ` / `LVNDR_RATE_WRITE` override
 them on a self-hosted deployment). A request to a path that does not exist (404) spends no token.
 Failed bearer lookups are limited per IP (30 a minute, then 429). The API is included on every
 plan; without an active plan every call is 402 `subscription_required`. Errors are
@@ -29,8 +30,8 @@ are opt-in when the key is made.
 
 | Scope | Allows |
 |---|---|
-| `read` | Every GET, plus marking a restore point, starting and ending runs, dismissing alerts |
-| `undo` | Undo one change, a batch or a run; a run started with this scope captures every unattributed change |
+| `read` | Every GET, plus marking a restore point, starting and ending runs |
+| `undo` | Undo one change, a batch or a run; dismiss alerts; a run started with this scope captures every unattributed change |
 | `rollback` | Roll the store back to a restore point (marking a point needs only `read`) |
 | `export` | Download the change log (`GET /export`, audited) |
 
@@ -52,7 +53,7 @@ are opt-in when the key is made.
 | `GET /restore-points/:id/preview` | read | returns `{preview, planHash}` | `lvndr preview <id>` |
 | `POST /restore-points/:id/rollback` | rollback | `{confirm: true, planHash, reason}`, both required; 202 `{pointId, job}` | `lvndr rollback <id> --confirm --plan-hash h` |
 | `GET /alerts` | read | `status=open|dismissed|all` (`all` also lists `resolved`), `limit` | `lvndr alerts [--all]` |
-| `POST /alerts/:id/dismiss` | read | | `lvndr dismiss <id>` |
+| `POST /alerts/:id/dismiss` | undo | | `lvndr dismiss <id>` |
 | `POST /runs` | read | `{agent, task, clientId, markRestorePoint}` (`markRestorePoint` defaults to true); returns `{run, capture, captureNote}` | `lvndr run start --agent <name>` |
 | `GET /runs` | read | `limit, open` | `lvndr run list` |
 | `GET /runs/:id` | read | `cursor, limit`; returns `{run, changes, nextCursor, attributedThrough, pendingDeliveries}` | `lvndr run show [id]` |

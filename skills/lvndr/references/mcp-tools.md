@@ -22,12 +22,12 @@ parentheses).
 | Tool | Use it to | Main arguments |
 |---|---|---|
 | `lvndr_status` | Check the key works; plan, tracked counts, last activity check | none |
-| `lvndr_search_changes` | List changes, newest first | `since`, `until` (ISO date-time), `type` (PRODUCT, COLLECTION, PAGE, BLOG, ARTICLE, MENU, THEME, METAFIELD_DEFINITION), `action`, `resourceId` (gid or Product-123), `actor`, `q`, `hideUndos`, `runId`, `limit`, `cursor` |
+| `lvndr_search_changes` | List changes, newest first | `since`, `until` (ISO date-time or how long ago: 30m, 24h, 7d, 2w), `type` (PRODUCT, COLLECTION, PAGE, BLOG, ARTICLE, MENU, THEME, METAFIELD_DEFINITION; any case), `action`, `resourceId` (gid or Product-123), `actor`, `q`, `hideUndos`, `runId`, `limit`, `cursor` |
 | `lvndr_get_change` | One change with its full before/after diff and attribution tier | `id` |
 | `lvndr_record_history` | Every stored version and change of one record | `resourceId` (gid or Product-123), `cursor` |
 | `lvndr_get_batch` | Everything one actor did around a change (no gap over 10 minutes) | `anchorChangeId` (any change in the batch) |
-| `lvndr_list_restore_points` | Restore points, newest first | none |
-| `lvndr_preview_undo` | Per-field plan for undoing one change: ready, conflict, noop, unsupported, with current and target values. Returns the `confirmation_token` for `lvndr_undo` | `id`, `includeConflicts` |
+| `lvndr_list_restore_points` | Restore points, newest first; the daily check's points only with `kind` sweep or all | `limit`, `cursor`, `kind` (manual, burst, app_install, sweep, all) |
+| `lvndr_preview_undo` | Per-field plan for undoing one change: ready, conflict, noop, unsupported, with current and target values. `items` has the same fields in merchant words (field label, current and target as text). Returns the `confirmation_token` for `lvndr_undo` | `id`, `includeConflicts` |
 | `lvndr_preview_undo_run` | Plan for undoing every change tagged with a run (the newest 50 planned). Returns the token for `lvndr_undo_run` | `id`, `reason`, `runId` (your current run, not the one being undone) |
 | `lvndr_preview_undo_batch` | Plan for undoing one actor's batch. Returns the token for `lvndr_undo_batch` | `anchorChangeId`, `reason`, `runId` |
 | `lvndr_preview_rollback` | What rolling back to a restore point would undo. Returns the token for `lvndr_rollback` | `pointId` |
@@ -40,19 +40,30 @@ parentheses).
 
 | Tool | Scope | Use it to | Main arguments |
 |---|---|---|---|
-| `lvndr_start_run` | read | Open a run before changing the store; marks a restore point by default. Returns `capture` and `captureNote` | `task`, `agent`, `clientId` (used only if it is the key's own OAuth client id), `markRestorePoint` (default true) |
+| `lvndr_start_run` | read | Open a run before changing the store; marks a restore point by default. Returns `capture`, `captureNote` and `warning` (set when the run will collect nothing: tell the user) | `task` (recommended), `agent`, `clientId` (used only if it is the key's own OAuth client id), `markRestorePoint` (default true) |
 | `lvndr_end_run` | read | Close the run when done | `id` |
 | `lvndr_mark_restore_point` | read | Mark a point to roll back to | `label`, `reason`, `runId` |
 | `lvndr_undo` | undo | Undo one change (snapshot first, then write) | `id`, `confirmation_token` (required, from lvndr_preview_undo), `includeConflicts` (must match the preview), `reason`, `runId` |
 | `lvndr_undo_run` | undo | Undo every change tagged with a run, newest first. Returns a background `job` | `id`, `confirmation_token` (required, from lvndr_preview_undo_run), `reason`, `runId` |
 | `lvndr_undo_batch` | undo | Undo one actor's batch, newest first. Returns a background `job` | `anchorChangeId`, `confirmation_token` (required, from lvndr_preview_undo_batch), `reason`, `runId` |
 | `lvndr_rollback` | rollback | Undo everything after a restore point, newest first. Returns a background `job` | `pointId`, `confirmation_token` (required, from lvndr_preview_rollback), `reason`, `runId` |
-| `lvndr_dismiss_alert` | read | Dismiss an alert after the user has looked at it | `id` |
+| `lvndr_dismiss_alert` | undo | Dismiss an alert after the user has looked at it (a read-only key cannot) | `id` |
 
 Every store write needs the `confirmation_token` from its preview: 10 minutes, single use, bound
 to the key, the target and what the preview saw. There is no `confirm` or `dryRun` shortcut. A
 preview with nothing to write (no `ready` field, counting `conflict` fields only with
-`includeConflicts`, or no change to undo) returns `confirmation_token: null`.
+`includeConflicts`, or no change to undo) returns `confirmation_token: null` and
+`nothingToUndo: true`.
+
+Every preview (`lvndr_preview_undo`, `_undo_run`, `_undo_batch`, `_rollback`) carries `items`:
+one entry per field per change, `{changeId, record: {id, type, title}, field, current, target,
+status, reason}`, with `field` in merchant words and both values as text ("(empty)" when empty).
+Show those to the user rather than `path`. `lvndr_undo` answers `undoRunId` (the undo record; `run`
+is the same object, kept for older clients) and `resultChangeId`, the change the undo's own write
+produced, once Shopify has reported it (null until then; find it later with
+`lvndr_search_changes` and `resourceId`). Refusals say what happened: the store changed since the
+preview, the change was already undone (with the undo or job id), or `includeConflicts` differs
+from the preview.
 
 ## Run capture
 

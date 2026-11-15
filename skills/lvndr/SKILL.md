@@ -88,10 +88,14 @@ first, and never on your own initiative when the user asked only for a report.
   `lvndr_list_alerts` (CLI: `lvndr alerts`); dismiss with `lvndr_dismiss_alert` only after the
   user agrees. An alert whose burst was undone by a batch, run or rollback undo is `resolved`.
 
-Attribution has three tiers and every change says which: `exact` (Shopify's admin events name
+Attribution has tiers and every change says which: `exact` (Shopify's admin events name
 the staff member or app, for creates, deletes, publishes and status changes), `channel` (only
-the channel is known) and `inferred` (field edits, metafields, menus and themes, which Shopify
-never attributes). Report the tier; never present an inferred actor as certain.
+the channel is known), `inferred` (a labelled guess for field edits, metafields, menus and
+themes, which Shopify never attributes) and `unknown` (no evidence at all yet). `unknown` is
+common: most plain field edits arrive with no actor and stay unknown until lvndr can guess, or
+until an open catch-all run adopts them. Report the tier; never present an inferred actor as
+certain, and never read `unknown` as "nobody". lvndr's own undos are always `exact` with name
+`lvndr undo`, and never join a run or a batch.
 
 ## Failure handling
 
@@ -102,7 +106,7 @@ never attributes). Report the tier; never present an inferred actor as certain.
 | 400 `plan_required` | You sent a write without the preview's `planHash`. Preview, show it, then send the hash. |
 | 409 `plan_changed` (CLI exit 7), or a job `error` starting `plan_changed` | The changes to undo moved since the preview. Preview again and show the user the new plan. |
 | 404 (CLI exit 4) | Wrong id, or a change older than the plan's retention. Search again. |
-| 429 (CLI exit 5), or a tool result "Rate limited; retry in N s" | Wait for `Retry-After` (or N) seconds, then retry the same call with the same `Idempotency-Key`. Limits are per key per minute and follow the plan (reads/writes: Starter 60/10, Growth 120/20, Scale 300/60, development stores 120/20). |
+| 429 (CLI exit 5), or a tool result "Rate limited; retry in N s" | Wait for `Retry-After` (or N) seconds, then retry the same call with the same `Idempotency-Key`. Limits are per key per minute and follow the plan (reads/writes: Starter 60/10, Growth 120/20, Scale 300/60, development stores 120/20 once billing is on; during early access every store gets the top rate, 300/60). |
 | Network error (CLI exit 6) | Retry once; writes are idempotent per `Idempotency-Key`. |
 | Undo or job `partial` or `failed` (CLI exit 2) | Read each result's `detail`; do not retry blindly. Re-preview: the record may have changed again (a `conflict`). |
 | Preview item `conflict` | The field was changed again after this change. Only overwrite with `includeConflicts` when the user agrees. |
