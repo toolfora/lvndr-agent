@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased (2026-11-15): review and time
+
+- Proposals (store pull requests): `lvndr_propose_changes`, `POST /proposals`, `lvndr propose`
+  propose field edits for the merchant to review instead of writing them (scope `read`). Review
+  with `lvndr_get_proposal` / `GET /proposals/:id` / `lvndr proposal <id>`. The merchant applies
+  in the app; a key applies only with the new opt-in scope `propose:apply`. The applied writes form
+  one run named after the proposer, so the whole proposal undoes as one.
+- Time travel: `lvndr_compare_versions`, `lvndr_preview_restore_version` + `lvndr_restore_version`;
+  REST `GET /records/:id/versions/:v`, `GET /records/:id/compare`, `POST /records/:id/restore`;
+  CLI `lvndr compare`, `lvndr restore-version`.
+- Scheduled undo: `lvndr_schedule_undo` (with the matching preview's token),
+  `lvndr_list_scheduled_undos`, `lvndr_cancel_scheduled_undo`; REST `/scheduled-undos`; CLI
+  `lvndr schedule`, `lvndr scheduled`, `lvndr unschedule`. Re-previewed when due and skipped with
+  the reason if the plan moved.
+
 ## 0.2.0 (2026-11-15): undo only what went wrong
 
 - `lvndr_undo` takes `fields` (paths from the preview's `items[].path`): put back one variant's

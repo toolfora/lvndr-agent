@@ -108,6 +108,14 @@ prints one command's usage.
 | `lvndr guard [--agent name] [--task text] [--client-id id] [--no-restore-point] [--wait 300] -- <command...>` | Run a command inside a run with a restore point (below) |
 | `lvndr login [--key k \| --with-token] [--url u] [--profile p] [--agent a] [--no-verify]` | Save a profile (checks the key with `GET /me` unless `--no-verify`; the key is not echoed; `--with-token` reads it from stdin) |
 | `lvndr openapi` | Print the OpenAPI document |
+| `lvndr propose <file.json \| -> [--title text] [--note text]` | Propose field edits for the merchant to review in LVNDR instead of writing them (needs only Read). The file is `{title, note, records: [{resourceId, changes: {"<field path>": value}}]}` or just the records list |
+| `lvndr proposals [--status s \| --all]` | Proposals on the store |
+| `lvndr proposal <id> [--apply --plan-hash h [--item id]... [--only kind]... \| --reject]` | One proposal against the live store; `--apply` needs a key with Apply proposals (`propose:apply`) and prints the run that undoes it |
+| `lvndr compare <record> <from> <to>` | What differs between two versions of a record |
+| `lvndr restore-version <record> <version> [--run --plan-hash h \| --yes] [--field path]...` | Preview or restore a record to an earlier version |
+| `lvndr schedule <change\|run\|batch\|rollback> <id> --at <+2h\|+3d\|ISO> [--plan-hash h]` | Without `--plan-hash`: preview and print the schedule line. With it: schedule the undo; at that time it runs only if the plan is unchanged |
+| `lvndr scheduled [--all \| --status s]` | Scheduled undos |
+| `lvndr unschedule <id>` | Cancel a scheduled undo before it runs |
 | `lvndr help [command]`, `lvndr <command> --help`, `lvndr --version` | All commands, or one command's usage |
 
 Time flags accept `30m`, `24h`, `7d`, `2w` or an ISO timestamp. `--type` takes `PRODUCT`,

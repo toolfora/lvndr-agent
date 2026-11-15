@@ -76,6 +76,21 @@ Follow these steps every time you are about to write to a store, whatever tool d
 Never run an undo, batch undo, run undo or rollback without showing or reading its preview
 first, and never on your own initiative when the user asked only for a report.
 
+## Propose instead of writing; versions; later
+
+- When the user should approve a change first (prices, descriptions, translations, alt text),
+  propose it: `lvndr_propose_changes` with `records: [{resourceId, changes: {"<field path>": value}}]`
+  (paths as undo previews list them; CLI: `lvndr propose <file.json>`). It writes only to LVNDR.
+  Tell the user it waits in LVNDR under Review; check the outcome with `lvndr_get_proposal`.
+  Applying is the merchant's decision: no MCP tool applies a proposal. The applied writes form one
+  run (`appliedRunId`) that undoes as one.
+- "What did this look like on Tuesday": `lvndr_record_history` for the versions,
+  `lvndr_compare_versions`, then `lvndr_preview_restore_version` and `lvndr_restore_version` with
+  its token (CLI: `lvndr compare`, `lvndr restore-version`).
+- "Put the prices back Monday at 9": preview the undo as usual, then `lvndr_schedule_undo` with
+  that preview's `confirmation_token` and `runAt` (CLI: `lvndr schedule ... --at`). It runs only
+  if the plan is unchanged then; `lvndr_list_scheduled_undos` shows outcomes.
+
 ## Reading the change log
 
 - Recent changes: `lvndr_search_changes` (`since`, `until`, `type`, `action`, `resourceId`,

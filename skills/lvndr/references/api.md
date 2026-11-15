@@ -34,6 +34,7 @@ are opt-in when the key is made.
 | `undo` | Undo one change, a batch or a run; dismiss alerts; a run started with this scope captures every unattributed change |
 | `rollback` | Roll the store back to a restore point (marking a point needs only `read`) |
 | `export` | Download the change log (`GET /export`, audited) |
+| `propose:apply` | Apply a proposal without the merchant clicking Apply (off by default; proposing needs only `read`) |
 
 ## Endpoints
 
@@ -60,6 +61,18 @@ are opt-in when the key is made.
 | `POST /runs/:id/end` | read | | `lvndr run end [id]` |
 | `POST /runs/:id/undo` | undo | `{dryRun, planHash, reason}`; dry run 200, real run (with `planHash`) 202 `{job}` | `lvndr run undo [id] [--run --plan-hash h]` |
 | `GET /jobs/:id` | read | one background undo job | `lvndr job <id>` |
+| `POST /proposals` | read | `{records: [{resourceId, changes: {"<field path>": value}}], title, note, agent}`; 201 `{proposal, items, reviewUrl}`; 400 `invalid_proposal` names any field LVNDR cannot write | `lvndr propose <file.json>` |
+| `GET /proposals` | read | `status` (open, applied, partly-applied, rejected, expired, all), `limit` | `lvndr proposals` |
+| `GET /proposals/:id` | read | the proposal against the live store: `items` (current, target, seen, changedSince, status), `kinds`, `planHash`, `planHashWithConflicts` | `lvndr proposal <id>` |
+| `POST /proposals/:id/apply` | propose:apply | `{planHash, itemIds, fieldKinds, includeConflicts, reason}`; restore point first; returns `runId` (undo it to take the proposal back) | `lvndr proposal <id> --apply --plan-hash h` |
+| `POST /proposals/:id/reject` | read (own) / propose:apply | `{reason}`; the proposing key may withdraw its own | `lvndr proposal <id> --reject` |
+| `GET /records/:gid/versions/:version` | read | one stored version: `{version, fields, state}` | |
+| `GET /records/:gid/compare` | read | `from, to` (version numbers) -> `{from, to, deleted, entries}` | `lvndr compare <ref> <from> <to>` |
+| `POST /records/:gid/restore` | undo | `{version, dryRun, fields, planHash, reason}`; dry run lists every differing field | `lvndr restore-version <ref> <v> [--run --plan-hash h]` |
+| `POST /scheduled-undos` | undo | `{kind: change|run|batch|rollback, targetId, runAt, planHash, fields, includeConflicts, excludeChangeIds, fieldKinds, reason}`; 201; re-previewed at `runAt`, skipped with the reason if the plan moved | `lvndr schedule <kind> <id> --at +3d --plan-hash h` |
+| `GET /scheduled-undos` | read | `status` (scheduled default, done, skipped, failed, cancelled, all), `limit` | `lvndr scheduled [--all]` |
+| `GET /scheduled-undos/:id` | read | one scheduled undo and its `result` | |
+| `POST /scheduled-undos/:id/cancel` | undo | 409 `not_scheduled` once it ran | `lvndr unschedule <id>` |
 | `GET /export` | export | `format=csv|json, since, until` | `lvndr export` |
 | `GET /openapi.json` | none | | `lvndr openapi` |
 
