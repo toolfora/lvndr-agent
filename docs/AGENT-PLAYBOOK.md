@@ -115,7 +115,10 @@ chat, or call `lvndr batch <anchorChangeId>` to list the burst.
 
 ## Limits to tell people about
 
-- Themes are tracked but not written back; LVNDR shows the earlier value for a manual restore.
+- Theme files are tracked (every Liquid, CSS, JS, JSON and locale file) but LVNDR cannot write them.
+  After an agent edits theme code, review it with `lvndr theme diff <changeId>` (MCP:
+  `lvndr_theme_change_files`) and put files back with `lvndr theme restore <changeId>`, which pushes
+  the earlier files through the merchant's own Shopify CLI after a preview.
 - Orders, customers and other protected data are not tracked.
 - An undone delete comes back with a new id. A rebuilt product has no media, inventory
   quantities or sales-channel publication; a deleted theme cannot be rebuilt.

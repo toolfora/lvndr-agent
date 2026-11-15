@@ -36,6 +36,25 @@ parentheses).
 | `lvndr_list_runs` | Recent agent runs | `limit`, `openOnly` |
 | `lvndr_get_job` | Progress of a background undo job (from `lvndr_undo_run`, `lvndr_undo_batch` or `lvndr_rollback`): status (queued, running, done, partial, failed), total, done, failed, skipped, remaining, error, one result per change | `id` (the job id) |
 
+## Theme code (scope `read`)
+
+Every file of the live and unpublished themes is tracked (Liquid, CSS, JS, JSON, locales; binary
+assets and text over 2 MB by checksum and size only), found by a check every 10 minutes. LVNDR
+cannot write theme files itself (Shopify allows `themeFilesUpsert` only to exempted apps), so these
+tools read, and the restore runs through the merchant's own Shopify CLI.
+
+| Tool | Use it to | Main arguments |
+|---|---|---|
+| `lvndr_theme_file_history` | A theme's changes, or one file's, newest first, each with the files it added, removed or modified | `themeId` (digits as Shopify CLI shows them, or OnlineStoreTheme-123), `file` (e.g. sections/header.liquid), `limit`, `cursor` |
+| `lvndr_theme_file_at` | One file's full content before (default) or after a change, at a stored version, or at the last check | `file`, `themeId` or `changeId`, `side` (before, after), `version` |
+| `lvndr_theme_change_files` | The files one theme change touched with a unified diff each, and `restore`: per file ready, conflict, noop or unsupported, the diff from the file now to its earlier content, `planHash` and `commands` | `id` (a change to a theme), `files`, `live` (compare with the store now) |
+
+To put theme files back after you broke them: call `lvndr_theme_change_files` with `live: true`,
+show the merchant the restore diff, then run (or ask them to run) `restore.commands.restore`
+(`lvndr theme restore <changeId>`) in their terminal. It previews again, asks, and pushes exactly
+the earlier files with `shopify theme push --only <file> --nodelete`. A file the change added
+cannot be pushed back (delete it in the code editor); binary files cannot either.
+
 ## Write
 
 | Tool | Scope | Use it to | Main arguments |

@@ -60,6 +60,9 @@ are opt-in when the key is made.
 | `POST /runs/:id/end` | read | | `lvndr run end [id]` |
 | `POST /runs/:id/undo` | undo | `{dryRun, planHash, reason}`; dry run 200, real run (with `planHash`) 202 `{job}` | `lvndr run undo [id] [--run --plan-hash h]` |
 | `GET /jobs/:id` | read | one background undo job | `lvndr job <id>` |
+| `GET /changes/:id/theme-files` | read | `file` (repeatable), `live=1` (compare with the store now), `content=1` (earlier content of restorable files); returns `{shop, change, theme, files, restore}` with a unified diff per file and the restore plan (`planHash`, `commands`) | `lvndr theme diff <id>`, `lvndr theme restore <id>` |
+| `GET /themes/:theme/history` | read | `:theme` digits or `OnlineStoreTheme-123`; `file`, `limit`, `cursor`; returns `{theme, file, changes, nextCursor}` | `lvndr theme history <themeId> [--file f]` |
+| `GET /themes/:theme/file` | read | `file` (required), `changeId` + `side` (before, after) or `version`; returns `{content, exists, binary, note, ...}` | |
 | `GET /export` | export | `format=csv|json, since, until` | `lvndr export` |
 | `GET /openapi.json` | none | | `lvndr openapi` |
 
