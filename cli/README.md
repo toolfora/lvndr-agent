@@ -22,7 +22,8 @@ key has scopes: `read`, `undo`, `rollback`, `export`. New keys get `read` and `u
 `rollback` (roll the store back to a restore point) and `export` (download the change log) when
 the key needs them. Marking a restore point and starting a run need only `read`. The API, MCP and this CLI are included on every lvndr plan and free on development
 stores; requests per minute per key follow the plan (reads/writes: Starter 60/10, Growth 120/20,
-Scale 300/60, development stores 120/20).
+Scale 300/60, development stores 120/20 once billing is on; during early access every store gets
+the top rate, 300/60).
 
 ```sh
 lvndr login                                  # prompts for the key, checks it with GET /me
