@@ -121,6 +121,9 @@ prints one command's usage.
 | `lvndr schedule <change\|run\|batch\|rollback> <id> --at <+2h\|+3d\|ISO> [--plan-hash h]` | Without `--plan-hash`: preview and print the schedule line. With it: schedule the undo; at that time it runs only if the plan is unchanged |
 | `lvndr scheduled [--all \| --status s]` | Scheduled undos |
 | `lvndr unschedule <id>` | Cancel a scheduled undo before it runs |
+| `lvndr theme history <themeId> [--file path] [--limit n] [--cursor c]` | A theme's changes (the id as Shopify CLI shows it), or one file's |
+| `lvndr theme diff <changeId> [--file path]...` | What a theme change did to each file, as unified diffs |
+| `lvndr theme restore <changeId> [--file path]... [--run --plan-hash h \| --yes] [--include-conflicts] [--out dir]` | Put theme files back through your own Shopify CLI (below) |
 | `lvndr help [command]`, `lvndr <command> --help`, `lvndr --version` | All commands, or one command's usage |
 
 Time flags accept `30m`, `24h`, `7d`, `2w` or an ISO timestamp. `--type` takes `PRODUCT`,
@@ -149,6 +152,28 @@ lvndr plan "undo the price changes Claude made yesterday, except on snowboards"
 
 `plan` writes nothing. Run the line it prints to write exactly that plan; the request is not read
 again, so "yesterday" cannot shift between the preview and the write.
+### Theme code: `lvndr theme restore`
+
+LVNDR tracks every file of the live and unpublished themes but cannot write theme files (Shopify
+allows that only to exempted apps). `theme restore` puts files back with the Shopify CLI you are
+logged in with: install it once (`npm install -g @shopify/cli`) and log in to the store.
+`LVNDR_SHOPIFY_CLI` names another binary.
+
+```sh
+lvndr theme diff cm3abc                                   # what the change did to each file
+lvndr theme restore cm3abc                                # preview: each file and the diff a restore makes
+lvndr theme restore cm3abc --run --plan-hash q3Xl0c2V     # push exactly that plan
+lvndr theme restore cm3abc --file sections/header.liquid --out ./earlier   # write the file, push it yourself
+```
+
+The preview lists each file as `will restore`, `changed since` (only with `--include-conflicts`),
+`already back` or `can't restore` (the change added the file, it is binary, or LVNDR has no copy).
+`--run` previews again and pushes nothing (exit 7, `plan_changed`) if a file moved. The push writes
+only the chosen files to a temporary folder and runs
+`shopify theme push --store <shop> --theme <id> --only <file>... --nodelete` (plus `--allow-live`
+for the live theme), so nothing else in the theme changes and nothing is deleted; the folder is
+removed afterwards. Exit 2 when the push fails, 127 when Shopify CLI is not installed. LVNDR's next
+theme check (within 10 minutes) records the restore as a change of its own.
 
 ### Global flags
 

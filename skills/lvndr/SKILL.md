@@ -13,7 +13,7 @@ metadata:
 LVNDR records changes to the parts of a Shopify store it tracks (products, variants, inventory,
 collections, pages, blogs and posts, media, sales-channel publication, metafields and definitions,
 menus, themes) with a before/after diff and the best attribution Shopify allows, and can put most
-of it back (themes are tracked but never written; see Limits).
+of it back (theme files through the merchant's own Shopify CLI; see Limits).
 
 You reach it two ways. Prefer MCP when the `lvndr_*` tools are available; otherwise use the CLI.
 
@@ -142,8 +142,11 @@ certain, and never read `unknown` as "nobody". LVNDR's own undos are always `exa
 
 ## Limits
 
-- Themes are tracked (settings and template JSON) but never written back: Shopify requires an
-  exemption for theme writes. LVNDR shows the earlier value for a manual restore.
+- Every theme file is tracked (Liquid, CSS, JS, JSON, locales), but LVNDR never writes theme
+  files: Shopify requires an exemption. Put them back with `lvndr theme restore <changeId>` in the
+  merchant's terminal (it previews, asks, then runs their own `shopify theme push --only ... --nodelete`);
+  `lvndr_theme_change_files` gives the diff and the exact command. Binary assets and files the
+  change added cannot be pushed back.
 - Orders, customers and other protected data are out of scope: not tracked, not undoable.
 - An undone delete is rebuilt from the last snapshot with a **new id**. A rebuilt product has
   its options, variants, metafields and manual-collection memberships, but no media, inventory

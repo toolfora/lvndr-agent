@@ -23,9 +23,9 @@
  */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { accessSync, chmodSync, constants as fsConstants, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
-import { constants as osConstants, homedir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { accessSync, chmodSync, constants as fsConstants, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { constants as osConstants, homedir, tmpdir } from "node:os";
+import { delimiter, dirname, join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
@@ -49,11 +49,11 @@ const BOOLEAN_FLAGS = new Set([
 const VALUE_FLAGS = new Set([
   "key", "url", "profile", "agent", "run-id", "reason", "task", "client-id", "format", "since", "until",
   "out", "limit", "cursor", "type", "action", "resource-id", "actor", "q", "status", "wait", "timeout",
-  "plan-hash", "kind", "field", "only", "exclude", "at", "item", "title", "note",
+  "plan-hash", "kind", "field", "only", "exclude", "at", "item", "title", "note", "file",
   "max-records", "max-price-change", "group", "batch", "change-id",
 ]);
 /** Value flags that may be given more than once; they collect into an array. */
-const REPEATABLE_FLAGS = new Set(["field", "only", "exclude", "item"]);
+const REPEATABLE_FLAGS = new Set(["field", "only", "exclude", "item", "file"]);
 const SHORT_FLAGS = { h: "help", q: "quiet", v: "version" };
 
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -370,7 +370,11 @@ export async function request(ctx, method, path, { body, query, raw = false, aut
     throw new CliError("No API key. Run `lvndr login`, set LVNDR_API_KEY, or pass --key (lvndr > Settings > Agents & API).", EXIT.AUTH);
   }
   const url = new URL(`${ctx.url}/api/v1${path}`);
-  for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined && v !== null && v !== false && v !== "") url.searchParams.set(k, String(v));
+  for (const [k, v] of Object.entries(query ?? {})) {
+    // A list repeats the parameter (?file=a&file=b).
+    if (Array.isArray(v)) for (const x of v) url.searchParams.append(k, String(x));
+    else if (v !== undefined && v !== null && v !== false && v !== "") url.searchParams.set(k, String(v));
+  }
   const headers = { Accept: raw ? "*/*" : "application/json", "User-Agent": `lvndr-cli/${VERSION}`, "X-Lvndr-Agent": ctx.agent };
   if (ctx.key) headers.Authorization = `Bearer ${ctx.key}`;
   if (ctx.runId) headers["X-Lvndr-Run-Id"] = ctx.runId;
@@ -673,6 +677,10 @@ export const USAGE = Object.freeze({
   insights: "insights [runId]  |  insights --batch <changeId>",
   plan: "plan <what to undo, in plain words...>  |  plan <words...> --yes",
   "undo-selection": "undo-selection <filters> [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  undo-selection <filters> --run --plan-hash <h>  |  undo-selection <filters> --yes",
+  "theme diff": "theme diff <changeId> [--file <path>]...",
+  "theme restore": "theme restore <changeId> [--file <path>]... [--include-conflicts] [--out <dir>]  |  theme restore <changeId> --run --plan-hash <h> [--file <path>]...  |  theme restore <changeId> --yes",
+  "theme history": "theme history <themeId> [--file <path>] [--limit 20] [--cursor c]",
+  "run undo": "run undo [id] [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  run undo [id] --run --plan-hash <h> [--only <kind>]...  |  run undo [id] --yes",
   guard: "guard [--agent name] [--task text] [--wait 300] -- <command...>",
   login: "login [--key lv_... | --with-token] [--url URL] [--profile name] [--no-verify]",
   propose: "propose <file.json | -> [--title text] [--note text]",
@@ -719,6 +727,10 @@ const DETAIL = {
   "run end": "Close the current (or named) run. Ending it again is harmless.",
   "run show": "One run, its changes and how fresh the tagging is (attributedThrough, pending deliveries).",
   "run list": "Recent agent runs.",
+  "theme diff": "What a theme change did to each file (line diffs), and what `lvndr theme restore` would put back. --file <path> (repeatable): only those files.",
+  "theme restore":
+    "Put theme files back as they were before a change, through your own Shopify CLI (LVNDR cannot write theme files itself; Shopify allows that only to exempted apps).\nWithout flags: preview (writes nothing): each file ready, changed since, already back or not restorable, with the diff from the file now to its earlier content, and the line that pushes exactly that plan.\n--run --plan-hash <h>: push the previewed plan; refused (exit 7) if a file moved since.\n--yes: for a person at a terminal: preview, ask, then push.\n--include-conflicts: also put back files changed again since the change.\n--out <dir>: write the earlier files to <dir> and print the push line instead of pushing.\nThe push runs `shopify theme push --store <shop> --theme <id> --only <file>... --nodelete` (plus --allow-live for the live theme) from a temporary folder holding only those files; Shopify CLI must be installed and logged in to the store (LVNDR_SHOPIFY_CLI names another binary).",
+  "theme history": "A theme's changes, newest first (the theme id as Shopify CLI shows it), or with --file only the changes to that file.",
   "run undo":
     "Without flags: preview undoing every change tagged with the run.\n--run --plan-hash <h>: queue that plan as a background job and wait for it.\n--yes: for a person at a terminal: preview, ask, then run it.",
   guard:
@@ -743,6 +755,9 @@ export function commandHelp(topic) {
   const name = String(topic ?? "").trim().replace(/\s+/g, " ");
   if (name === "run" || name === "runs") {
     return ["Usage:", ...Object.keys(USAGE).filter((k) => k.startsWith("run ")).map((k) => `  lvndr ${USAGE[k]}`), "", "Agent runs: announce, review and undo a unit of agent work."].join("\n");
+  }
+  if (name === "theme") {
+    return ["Usage:", ...Object.keys(USAGE).filter((k) => k.startsWith("theme ")).map((k) => `  lvndr ${USAGE[k].split("  |  ")[0]}`), "", "Theme code: every file of the live and unpublished themes, diffs per file, and restore through your own Shopify CLI.", "lvndr theme <diff|restore|history> --help for one."].join("\n");
   }
   if (!USAGE[name]) return null;
   return [`Usage: lvndr ${USAGE[name].split("  |  ").join("\n       lvndr ")}`, "", DETAIL[name] ?? "", "", "Global options: --json --ndjson --quiet --key --url --profile --agent --run-id --no-retry --timeout"].join("\n");
@@ -800,6 +815,12 @@ Review and time
   schedule <kind> <id> --at +3d [--plan-hash <h>]
                                        undo a change, run, batch or rollback later
   scheduled [--all] | unschedule <id>  scheduled undos
+Theme code (restored through your own Shopify CLI, which must be logged in to the store)
+  theme history <themeId> [--file f]   a theme's changes, or one file's
+  theme diff <changeId> [--file f]...  what the change did to each file
+  theme restore <changeId> [--file f]...         preview; prints the line that pushes that plan
+  theme restore <changeId> --run --plan-hash <h> push the earlier files (shopify theme push)
+  theme restore <changeId> --out <dir>           write the earlier files to a folder instead
 
 Setup
   login [--key lv_... | --with-token] [--url URL] [--profile name] [--no-verify]
@@ -814,7 +835,7 @@ Exit codes: 0 ok, 1 usage/other, 2 undo partial or failed, 3 auth (401/403), 4 n
 5 rate limited, 6 network, 7 conflict (409, e.g. plan_changed: preview again), 8 the shop's
 plan lacks the API (402). Environment: LVNDR_API_KEY, LVNDR_API_URL, LVNDR_PROFILE,
 LVNDR_AGENT, LVNDR_RUN_ID, LVNDR_CONFIG, LVNDR_POLL_MS (job polling; default: the server's pollAfterMs),
-LVNDR_GUARD_POLL_MS (guard's run polling, default 20000). Keys: lvndr > Settings > Agents & API.`;
+LVNDR_GUARD_POLL_MS (guard's run polling, default 20000), LVNDR_SHOPIFY_CLI (the Shopify CLI binary theme restore runs, default shopify). Keys: lvndr > Settings > Agents & API.`;
 
 function need(args, n, usage) {
   if (args.length < n || args.slice(0, n).some((a) => !a)) throw new CliError(`usage: lvndr ${usage}`);
@@ -1015,6 +1036,192 @@ async function login(parsed, io) {
   const path = saveConfig(config, ctx.env);
   const shop = me?.shop ?? me?.key?.shop ?? null;
   return { result: { profile: ctx.profileName, url, shop, configPath: path }, human: [`saved profile "${ctx.profileName}"${shop ? ` for ${shop}` : ""} to ${path}`] };
+}
+
+// ---- theme code -------------------------------------------------------------------------------
+// LVNDR tracks every theme file but cannot write theme files (Shopify allows themeFilesUpsert only
+// to exempted apps), so `theme restore` writes the earlier files to a temporary folder and pushes
+// exactly those with the merchant's own Shopify CLI login. Same preview-first rules as writeFlow.
+
+/** Theme file paths the CLI will write to disk: a theme folder, plain segments, no `..`. */
+const THEME_FILE_RE = /^(assets|blocks|config|layout|locales|sections|snippets|templates)\/[A-Za-z0-9_.@+ -]+(\/[A-Za-z0-9_.@+ -]+)*$/;
+const THEME_DIRS = ["assets", "blocks", "config", "layout", "locales", "sections", "snippets", "templates", "templates/customers"];
+export const isThemeFilePath = (p) => typeof p === "string" && p.length <= 300 && THEME_FILE_RE.test(p) && !p.split("/").some((s) => s === "." || s === "..");
+
+const THEME_STATUS_WORD = { ready: "will restore", conflict: "changed since", noop: "already back", unsupported: "can't restore" };
+const FILE_STATUS_MARK = { added: "A", removed: "D", modified: "M" };
+
+/** A unified diff, red and green at a colour terminal. */
+export function colorDiff(text, color) {
+  if (!color) return text;
+  return text
+    .split("\n")
+    .map((l) => (l.startsWith("+++") || l.startsWith("---") ? `\x1b[1m${l}\x1b[0m` : l.startsWith("@@") ? `\x1b[36m${l}\x1b[0m` : l.startsWith("+") ? `\x1b[32m${l}\x1b[0m` : l.startsWith("-") ? `\x1b[31m${l}\x1b[0m` : l))
+    .join("\n");
+}
+
+const useColor = (io, flags) => !flags.json && !flags.quiet && !!io.stdout?.isTTY && !(io.env ?? process.env).NO_COLOR;
+const themeLabel = (t) => `${t?.name ?? "theme"} (${t?.role === "MAIN" ? "live" : String(t?.role ?? "?").toLowerCase()}, ${t?.numericId ?? "?"})`;
+
+function themeRestoreLines(r, color, includeConflicts) {
+  const plan = r.restore;
+  if (!plan) return ["This change created or deleted the whole theme; files are not restored one by one."];
+  const lines = [`Restore to ${themeLabel(plan.theme)} on ${r.shop}, compared with ${plan.live ? "the store now" : "LVNDR's last check"}:`];
+  for (const i of plan.items) {
+    const counts = i.additions || i.deletions ? ` (+${i.additions} -${i.deletions})` : "";
+    lines.push(`  ${pad(THEME_STATUS_WORD[i.status] ?? i.status, 14)} ${i.filename}${counts}${i.reason ? `: ${i.reason}` : ""}`);
+  }
+  for (const i of plan.items) if (i.diff && (i.status === "ready" || (includeConflicts && i.status === "conflict"))) lines.push("", colorDiff(i.diff.replace(/\n$/, ""), color));
+  if (plan.theme?.role === "MAIN") lines.push("", "This is the live theme: shoppers see a restored file as soon as it is pushed.");
+  return lines;
+}
+
+const restorable = (plan, includeConflicts) => (plan?.items ?? []).filter((i) => i.status === "ready" || (includeConflicts && i.status === "conflict"));
+
+/** Write each file's earlier content under `dir` (only theme paths, only inside `dir`). */
+export function writeThemeFiles(dir, items) {
+  const root = resolve(dir);
+  for (const d of THEME_DIRS) mkdirSync(join(root, d), { recursive: true });
+  for (const i of items) {
+    if (!isThemeFilePath(i.filename)) throw new CliError(`refusing to write ${JSON.stringify(i.filename)}: not a theme file path`);
+    if (typeof i.content !== "string") throw new CliError(`LVNDR returned no earlier content for ${i.filename}`);
+    const target = resolve(root, i.filename);
+    if (!target.startsWith(root + sep)) throw new CliError(`refusing to write outside ${root}: ${i.filename}`);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, i.content);
+  }
+  return root;
+}
+
+/** The `shopify theme push` arguments for these files (run from the folder that holds them). */
+export function pushArgs(dir, shop, theme, files) {
+  return ["theme", "push", "--path", dir, "--store", shop, "--theme", String(theme.numericId), ...files.flatMap((f) => ["--only", f]), "--nodelete", ...(theme.role === "MAIN" ? ["--allow-live"] : [])];
+}
+
+function runShopify(bin, args, env) {
+  return new Promise((resolveExit) => {
+    const child = spawn(bin, args, { stdio: "inherit", env });
+    child.once("error", (e) => resolveExit({ code: 127, error: e.message }));
+    child.once("exit", (code, signal) => resolveExit({ code: code ?? 128 + (osConstants.signals[signal] ?? 0) }));
+  });
+}
+
+async function themeRestore(ctx, args, flags, io) {
+  const id = args[0];
+  const files = flags.file ?? [];
+  for (const f of files) if (!isThemeFilePath(f)) throw new CliError(`--file takes a theme file path such as sections/header.liquid (got ${f})`);
+  const includeConflicts = !!flags.includeConflicts;
+  const fileArgs = files.map((f) => ` --file ${shellQuote(f)}`).join("");
+  const previewCommand = `lvndr theme restore ${id}${fileArgs}${includeConflicts ? " --include-conflicts" : ""}`;
+  const color = useColor(io, flags);
+  const fetchPlan = (content) => request(ctx, "GET", `/changes/${encodeURIComponent(id)}/theme-files`, { query: { live: "1", content: content ? "1" : undefined, file: files } });
+  const bin = (ctx.env ?? process.env).LVNDR_SHOPIFY_CLI || "shopify";
+
+  const push = async (r) => {
+    const plan = r.restore;
+    const items = restorable(plan, includeConflicts);
+    if (!items.length) return { result: { ...r, pushed: [] }, human: [...themeRestoreLines(r, false, includeConflicts), "Nothing to restore; nothing was written."] };
+    if (flags.out) {
+      const dir = writeThemeFiles(flags.out, items);
+      const line = ["shopify", ...pushArgs(dir, r.shop, plan.theme, items.map((i) => i.filename))].map(shellQuote).join(" ");
+      return { result: { ...r, out: dir, pushed: [] }, human: [`Wrote ${items.length} earlier file(s) to ${dir}. Nothing was pushed. To push them:`, `  ${line}`] };
+    }
+    if (!commandExists(bin, ctx.env)) throw new CliError(`Shopify CLI not found (${bin}). Install it (npm install -g @shopify/cli), log in to ${r.shop}, then run this again; or write the files with --out <dir> and push them yourself.`, 127);
+    const dir = mkdtempSync(join(tmpdir(), "lvndr-theme-"));
+    try {
+      writeThemeFiles(dir, items);
+      const pushed = items.map((i) => i.filename);
+      io.stderr.write(`lvndr: pushing ${pushed.length} file(s) to ${themeLabel(plan.theme)} with ${bin} theme push\n`);
+      const exit = await runShopify(bin, pushArgs(dir, r.shop, plan.theme, pushed), ctx.env ?? process.env);
+      if (exit.code !== 0) throw new CliError(`shopify theme push exited ${exit.code}${exit.error ? ` (${exit.error})` : ""}; check its output above. Preview again with \`${previewCommand}\` before retrying.`, EXIT.UNDO_FAILED, { pushExitCode: exit.code });
+      return {
+        result: { ...r, pushed },
+        human: [`Restored ${pushed.length} file(s) on ${themeLabel(plan.theme)}: ${pushed.join(", ")}.`, "LVNDR's next theme check (within 10 minutes) records the restore as a change, so it can be undone too."],
+        quietIds: pushed,
+      };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  if (flags.yes) {
+    if (!(io.stdin ?? process.stdin).isTTY) throw new CliError(`--yes is for a person at a terminal. Preview with \`${previewCommand}\`, show the plan, then pass the --plan-hash it prints.`);
+    const r = await fetchPlan(true);
+    const out = flags.json || flags.quiet ? io.stderr : io.stdout;
+    for (const line of themeRestoreLines(r, color, includeConflicts)) out.write(`${line}\n`);
+    const items = restorable(r.restore, includeConflicts);
+    if (!items.length) return { result: r, human: ["Nothing to restore; nothing was written."] };
+    if (!(await confirm(`Push ${items.length} file(s) to ${themeLabel(r.restore.theme)}? [y/N] `, io))) return { result: { ...r, applied: false }, human: ["Not pushed; nothing was written."] };
+    return push(r);
+  }
+  if (flags.run) {
+    if (!flags.planHash) throw new CliError(`preview first: ${previewCommand} (it prints the --plan-hash to pass; or --yes at a terminal)`);
+    const r = await fetchPlan(true);
+    if (r.restore?.planHash !== flags.planHash) {
+      throw new CliError(`plan_changed: the theme moved since that preview (or the files differ), so nothing was pushed. Preview again: ${previewCommand}`, EXIT.CONFLICT, { code: "plan_changed" });
+    }
+    return push(r);
+  }
+  if (flags.out) return push(await fetchPlan(true));
+  const r = await fetchPlan(false);
+  const items = restorable(r.restore, includeConflicts);
+  const lines = themeRestoreLines(r, color, includeConflicts);
+  if (!items.length) return { result: r, human: [...lines, "Nothing to restore; nothing was written."] };
+  const conflicts = (r.restore?.items ?? []).filter((i) => i.status === "conflict").length;
+  return {
+    result: r,
+    human: [
+      ...lines,
+      "",
+      "preview only; nothing was written.",
+      `To push exactly this plan: lvndr theme restore ${id} --run --plan-hash ${r.restore.planHash}${fileArgs}${includeConflicts ? " --include-conflicts" : ""}`,
+      ...(conflicts && !includeConflicts ? [`${conflicts} file(s) changed again since; add --include-conflicts to put them back too.`] : []),
+      "Or write the files to a folder instead: add --out <dir>",
+    ],
+  };
+}
+
+async function themeCommand(ctx, args, flags, io) {
+  const [verb, ...rest] = args;
+  const enc = encodeURIComponent;
+  if (verb === "history") {
+    need(rest, 1, USAGE["theme history"]);
+    if (flags.file?.length > 1) throw new CliError("theme history takes one --file");
+    const file = flags.file?.[0];
+    if (file && !isThemeFilePath(file)) throw new CliError(`--file takes a theme file path such as sections/header.liquid (got ${file})`);
+    const theme = String(rest[0]).replace(/^gid:\/\/shopify\/OnlineStoreTheme\//, "");
+    const r = await request(ctx, "GET", `/themes/${enc(theme)}/history`, { query: { file, limit: parseLimit(flags.limit), cursor: flags.cursor } });
+    const list = r.changes ?? [];
+    const human = [`${themeLabel(r.theme)}${r.theme?.deleted ? "  [deleted]" : ""}${file ? `: ${file}` : ""}`];
+    human.push(...table([["ID", 26], ["WHEN", 26], ["BY", 28], ["FILES", 0]], list.map((c) => [c.id, when(c.occurredAt), actorOf(c), (c.files ?? []).map((f) => `${FILE_STATUS_MARK[f.status] ?? "M"} ${f.filename}`).join(", ") || c.fields || ""])));
+    if (!list.length) human.push("no changes");
+    const notes = r.nextCursor ? [`more: lvndr theme history ${rest[0]}${file ? ` --file ${shellQuote(file)}` : ""} --cursor ${r.nextCursor}`] : [];
+    if (list.length) notes.push(`See one change's files: lvndr theme diff ${list[0].id}`);
+    return { result: r, human, notes, list, quietIds: list.map((c) => c.id) };
+  }
+  if (verb === "diff") {
+    need(rest, 1, USAGE["theme diff"]);
+    const files = flags.file ?? [];
+    for (const f of files) if (!isThemeFilePath(f)) throw new CliError(`--file takes a theme file path such as sections/header.liquid (got ${f})`);
+    const r = await request(ctx, "GET", `/changes/${enc(rest[0])}/theme-files`, { query: { live: "1", file: files } });
+    const color = useColor(io, flags);
+    const human = [`${themeLabel(r.theme)}: ${r.change?.fields ?? ""} at ${when(r.change?.occurredAt)} by ${actorOf(r.change)}`];
+    for (const f of r.files ?? []) {
+      human.push("", `${FILE_STATUS_MARK[f.status] ?? "M"} ${f.filename}${f.additions || f.deletions ? ` (+${f.additions} -${f.deletions})` : ""}${f.note ? `: ${f.note}` : ""}`);
+      if (f.diff) human.push(colorDiff(f.diff.replace(/\n$/, ""), color));
+    }
+    if (r.restore) {
+      const ready = restorable(r.restore, false).length;
+      human.push("", ready ? `To put ${ready} file(s) back: lvndr theme restore ${rest[0]}${files.map((f) => ` --file ${shellQuote(f)}`).join("")}   (previews first)` : "Nothing here can be restored by a push (see lvndr theme restore for why).");
+    }
+    return { result: r, human };
+  }
+  if (verb === "restore") {
+    need(rest, 1, USAGE["theme restore"]);
+    return themeRestore(ctx, rest, flags, io);
+  }
+  const hint = verb ? suggestCommand(verb, ["diff", "restore", "history"]) : null;
+  throw new CliError(`${verb ? `unknown theme command: ${verb}${hint ? ` (did you mean \`lvndr theme ${hint}\`?)` : ""}` : "usage: lvndr theme diff|restore|history"}\n\n${commandHelp("theme")}`);
 }
 
 /** The `lvndr changes` command line that repeats these filters, for the "more" hint. */
@@ -1472,6 +1679,8 @@ async function dispatch(parsed, io) {
         extra: (r) => kindHints(r, flags, `lvndr undo-selection ${shellQuote(filters)}`),
       });
     }
+    case "theme":
+      return themeCommand(ctx, args, flags, io);
     case "export": {
       const text = await request(ctx, "GET", "/export", { raw: true, query: { format: flags.format, since: toIso(flags.since), until: toIso(flags.until) } });
       if (flags.out) {
