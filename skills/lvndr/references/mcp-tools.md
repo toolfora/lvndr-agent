@@ -3,7 +3,7 @@
 Endpoint: `POST https://lvndr.toolfora.com/mcp` (Streamable HTTP, JSON-RPC:
 `initialize`, `tools/list`, `tools/call`, `ping`). Auth: MCP OAuth (the client signs in through
 the Shopify admin with only the URL) or `Authorization: Bearer <LVNDR_API_KEY>`, the same key as
-the REST API. A key carries scopes (`read`, `undo`, `rollback`, `export`); new keys and OAuth
+the REST API. A key carries scopes (`read`, `undo`, `rollback`, `export`, `propose:apply`); new keys and OAuth
 grants that ask for no scope get `read` and `undo`, so `lvndr_rollback` needs a key the merchant
 gave `rollback` on purpose.
 
@@ -35,6 +35,11 @@ parentheses).
 | `lvndr_get_run` | One agent run with the changes tagged to it, plus `attributedThrough` and `pendingDeliveries` (how far LVNDR has caught up) | `id`, `limit`, `cursor` |
 | `lvndr_list_runs` | Recent agent runs | `limit`, `openOnly` |
 | `lvndr_get_job` | Progress of a background undo job (from `lvndr_undo_run`, `lvndr_undo_batch` or `lvndr_rollback`): status (queued, running, done, partial, failed), total, done, failed, skipped, remaining, error, one result per change | `id` (the job id) |
+| `lvndr_list_proposals` | Proposals on the store (open and partly applied by default), to see whether the merchant applied or rejected yours | `status` (open, applied, partly-applied, rejected, expired, all), `limit` |
+| `lvndr_get_proposal` | One proposal compared with the live store: each field now, as proposed and as it was when proposed; `changedSince` and status conflict when the store moved since | `id` |
+| `lvndr_compare_versions` | What differs between two stored versions of a record, in merchant words | `resourceId` (gid or Product-123), `from`, `to` (version numbers from lvndr_record_history) |
+| `lvndr_preview_restore_version` | What restoring a record to an earlier version would write (every differing field: ready, or unsupported with the reason). Returns the token for `lvndr_restore_version` | `resourceId`, `version` |
+| `lvndr_list_scheduled_undos` | Undos set to run later; status all also lists the ones that ran (done, skipped with the reason, failed) | `status` (scheduled, done, skipped, failed, cancelled, all), `limit` |
 
 ## Write
 
@@ -48,6 +53,10 @@ parentheses).
 | `lvndr_undo_batch` | undo | Undo one actor's batch, newest first. Returns a background `job` | `anchorChangeId`, `confirmation_token` (required, from lvndr_preview_undo_batch), `reason`, `runId`, `excludeChangeIds`, `fieldKinds` (narrowing: see below) |
 | `lvndr_rollback` | rollback | Undo everything after a restore point, newest first. Returns a background `job` | `pointId`, `confirmation_token` (required, from lvndr_preview_rollback), `reason`, `runId`, `excludeChangeIds`, `fieldKinds` (narrowing: see below) |
 | `lvndr_dismiss_alert` | undo | Dismiss an alert after the user has looked at it (a read-only key cannot) | `id` |
+| `lvndr_propose_changes` | read | Propose field edits for the merchant to review and apply in LVNDR instead of writing them; writes only to LVNDR | `records` (one `{resourceId, changes: {"<field path>": value}}` per record), `title`, `note`, `agent`, `runId` |
+| `lvndr_restore_version` | undo | Put a record back to an earlier version (snapshot first), or only some fields of it | `resourceId`, `version`, `confirmation_token` (required, from lvndr_preview_restore_version), `fields` (paths from the preview's `items[].path`), `reason`, `runId` |
+| `lvndr_schedule_undo` | undo | Run a previewed undo at a set time; it runs only if the plan is unchanged then, else it is skipped with the reason. A rollback also needs `rollback` | `kind` (change, run, batch, rollback), `targetId`, `runAt` (ISO 8601 with a time zone), `confirmation_token` (required, from the matching preview), `fields`, `includeConflicts`, `excludeChangeIds`, `fieldKinds`, `reason`, `runId` |
+| `lvndr_cancel_scheduled_undo` | undo | Cancel a scheduled undo before it runs | `id` |
 
 Every store write needs the `confirmation_token` from its preview: 10 minutes, single use, bound
 to the key, the target and what the preview saw. There is no `confirm` or `dryRun` shortcut. A
@@ -127,3 +136,25 @@ Undo only what went wrong. On `lvndr_undo`, `fields` takes paths from the previe
 from the preview's `kinds[].kind` ("Price", "Tags") and `excludeChangeIds` leaves changes out.
 Preview with the same arguments to show the merchant the narrowed plan; the confirmation token
 covers any subset of what it previewed. Whatever is left out stays undoable later.
+
+## Proposals instead of writes
+
+When the merchant should approve a change before it lands (prices, descriptions, translations,
+alt text), propose it instead of writing it: `lvndr_propose_changes` with one
+`{resourceId, changes: {"<field path>": value}}` per record. Paths are the ones undo previews use
+(`title`, `variants[ProductVariant/1].price`, `metafields[Metafield/9].value`); a field LVNDR
+cannot write is refused with the reason. Then tell the merchant the proposal waits in LVNDR
+(Review) and link `reviewUrl`. They see each field now, as proposed, and whether it changed since
+you proposed it, and apply all or part. LVNDR marks a restore point first, and the applied writes
+form one agent run named after you, so the whole proposal can be undone as one
+(`lvndr_preview_undo_run` with the proposal's `appliedRunId`). Applying is the merchant's
+decision: no MCP tool applies a proposal, and a REST key needs the `propose:apply` scope.
+
+## Time travel and scheduled undo
+
+`lvndr_record_history` lists a record's versions; `lvndr_compare_versions` shows what differs
+between two of them; `lvndr_preview_restore_version` then `lvndr_restore_version` puts the record
+back to one (same token rules as an undo). `lvndr_schedule_undo` runs any previewed undo later
+("put the prices back Monday at 9"): pass the preview's `confirmation_token`; at `runAt` LVNDR
+previews again and runs it only if nothing moved, otherwise the scheduled undo is `skipped` with
+the reason (`lvndr_list_scheduled_undos {status: "all"}`).
