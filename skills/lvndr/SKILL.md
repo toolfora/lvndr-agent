@@ -1,8 +1,8 @@
 ---
 name: lvndr
-description: Safety net for changing a Shopify store through LVNDR's change log. Use whenever you change a Shopify store with any tool (Admin API, Shopify CLI, store MCP, an app, a CSV import): mark a restore point or start a run first, verify afterwards what actually changed and who changed it, and undo precisely by change, batch, run or restore point with a preview before any write. Also use when asked what changed in a store, who changed a product, price, collection, page, menu or theme, or to roll a store back.
+description: "Safety net for changing a Shopify store through LVNDR's change log. Use whenever you change a Shopify store with any tool (Admin API, Shopify CLI, store MCP, an app, a CSV import): mark a restore point or start a run first, verify afterwards what actually changed and who changed it, and undo precisely by change, batch, run or restore point with a preview before any write. Also use when asked what changed in a store, who changed a product, price, collection, page, menu or theme, or to roll a store back."
 license: MIT
-compatibility: Needs the LVNDR Shopify app installed on the store, and either an MCP client that signs in with OAuth or an LVNDR API key (LVNDR_API_KEY); every LVNDR plan includes API access. Works through the LVNDR MCP server or the `lvndr` CLI (Node 20+); network access to the LVNDR app URL.
+compatibility: "Needs the LVNDR Shopify app installed on the store, and either an MCP client that signs in with OAuth or an LVNDR API key (LVNDR_API_KEY); every LVNDR plan includes API access. Works through the LVNDR MCP server or the `lvndr` CLI (Node 20+); network access to the LVNDR app URL."
 metadata:
   author: HereNow Labs
   version: "0.1.0"
