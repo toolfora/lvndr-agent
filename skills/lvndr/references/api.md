@@ -46,6 +46,7 @@ are opt-in when the key is made.
 | `GET /changes/:id` | read | | `lvndr change <id>` |
 | `POST /changes/:id/undo` | undo | `{dryRun, includeConflicts, planHash, reason}`; `dryRun` defaults to true; `planHash` required when `dryRun` is false; returns `{plan, planHash, run}` | `lvndr undo <id> [--run --plan-hash h]` |
 | `GET /records/:gid/history` | read | gid URL-encoded or `Product-123`; `cursor` | `lvndr history <ref>` |
+| `GET /records/:gid/edits` | read | `field` (repeatable) -> `{resourceId, edits: [{field, changeId, at, by, certainty, actor, toolfora}], complete}`: who last wrote each field (`by`: person, app, agent, lvndr, shopify, unknown) | `lvndr edits <ref> [--field f]` |
 | `GET /batches/:id` | read | | `lvndr batch <id>` |
 | `POST /batches/:id/undo` | undo | `{dryRun, planHash, reason}`; dry run 200, real run (with `planHash`) 202 `{job}` | `lvndr undo-batch <id> [--run --plan-hash h]` |
 | `GET /restore-points` | read | | `lvndr points` |

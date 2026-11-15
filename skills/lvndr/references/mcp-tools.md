@@ -26,6 +26,7 @@ parentheses).
 | `lvndr_search_changes` | List changes, newest first | `since`, `until` (ISO date-time or how long ago: 30m, 24h, 7d, 2w), `type` (PRODUCT, COLLECTION, PAGE, BLOG, ARTICLE, MENU, THEME, METAFIELD_DEFINITION, REDIRECT, DISCOUNT; any case), `action`, `resourceId` (gid or Product-123), `actor`, `q`, `hideUndos`, `runId`, `limit`, `cursor` |
 | `lvndr_get_change` | One change with its full before/after diff and attribution tier | `id` |
 | `lvndr_record_history` | Every stored version and change of one record | `resourceId` (gid or Product-123), `cursor` |
+| `lvndr_field_edits` | Who last wrote each field of a record (`by`: person, app, agent, lvndr, shopify, unknown). Ask before overwriting a field; skip what a person edited | `resourceId`, `fields` (paths, e.g. `title`, `translations[fr:title]`) |
 | `lvndr_get_batch` | Everything one actor did around a change (no gap over 10 minutes) | `anchorChangeId` (any change in the batch) |
 | `lvndr_list_restore_points` | Restore points, newest first; the daily check's points only with `kind` sweep or all | `limit`, `cursor`, `kind` (manual, burst, app_install, sweep, all) |
 | `lvndr_preview_undo` | Per-field plan for undoing one change: ready, conflict, noop, unsupported, with current and target values. `items` has the same fields in merchant words (field label, current and target as text). Returns the `confirmation_token` for `lvndr_undo` | `id`, `includeConflicts` |

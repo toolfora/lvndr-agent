@@ -658,6 +658,7 @@ export const USAGE = Object.freeze({
   changes: "changes [--since 24h] [--until ISO] [--type PRODUCT] [--action update] [--resource-id Product-1] [--actor name] [--q text] [--hide-undos] [--run-id id] [--limit 50] [--cursor c]",
   change: "change <id>",
   history: "history <gid|Type-digits> [--cursor c]",
+  edits: "edits <gid|Type-digits> [--field <path>]...",
   batch: "batch <id>",
   points: "points [--all | --kind manual|burst|app_install|sweep] [--limit 50] [--cursor c]",
   preview: "preview <pointId> [--only <kind>]... [--exclude <changeId>]...",
@@ -704,6 +705,7 @@ const DETAIL = {
   changes: "Changes, newest first. --since/--until take 30m, 24h, 7d, 2w or an ISO time. Pages with --cursor.",
   change: "One change with its full before/after diff and attribution.",
   history: "Every stored version and change of one record (gid://shopify/Product/1 or Product-1).",
+  edits: "Who last wrote each field of a record (a person, an app, an agent, LVNDR): check before overwriting someone's edit. --field (repeatable) limits it to those fields.",
   batch: "Everything one actor did around a change (no gap over ten minutes).",
   points: "Restore points, newest first. The daily check's points are hidden unless --all (or --kind sweep).",
   preview: "What rolling back to a restore point would undo. Prints the `lvndr rollback <pointId> --confirm --plan-hash <h>` line that runs exactly that plan.",
@@ -779,6 +781,7 @@ Read
           [--actor name] [--q text] [--hide-undos] [--run-id id] [--limit 50] [--cursor c]
   change <id>                          one change with its diff
   history <gid|Type-digits>            every version of one record
+  edits <gid|Type-digits> [--field f]  who last wrote each field (a person, an app, an agent)
   batch <id>                           everything one actor did around a change
   points [--all]                       restore points (--all includes the daily check's)
   preview <pointId>                    what rolling back to a point would write
@@ -1309,6 +1312,15 @@ async function dispatch(parsed, io) {
       if (c.summary) human.push(c.summary);
       for (const e of c.diff ?? []) human.push(`  ${e.field ?? e.path}: ${e.beforeText ?? showValue(e.before)} -> ${e.afterText ?? showValue(e.after)}`);
       return { result: r, human };
+    }
+    case "edits": {
+      need(args, 1, USAGE.edits);
+      const r = await request(ctx, "GET", `/records/${enc(toGid(args[0]))}/edits`, { query: { field: flags.field } });
+      const list = r.edits ?? [];
+      const who = { person: "a person", app: "an app", agent: "an agent", lvndr: "LVNDR (an undo)", shopify: "Shopify", unknown: "unknown" };
+      const human = table([["FIELD", 34], ["LAST WRITTEN BY", 22], ["WHO", 26], ["WHEN", 0]], list.map((e) => [e.field, who[e.by] ?? e.by, e.actor ?? "", e.at ? when(e.at) : "never changed"]));
+      if (r.complete === false) human.push(`(looked at the newest ${r.scanned} changes; an older edit may not be shown)`);
+      return { result: r, human, list };
     }
     case "history": {
       need(args, 1, USAGE.history);

@@ -90,6 +90,7 @@ prints one command's usage.
 | `lvndr changes [filters]` | Changes, newest first. Filters: `--since`, `--until`, `--type`, `--action`, `--resource-id`, `--actor`, `--q`, `--hide-undos`, `--run-id`, `--limit`, `--cursor` |
 | `lvndr change <id>` | One change with its diff and attribution tier |
 | `lvndr history <gid\|Type-digits>` | A record's stored versions and changes (`Product-123`, `gid://shopify/Product/123`) |
+| `lvndr edits <gid\|Type-digits> [--field path]...` | Who last wrote each field (a person, an app, an agent, LVNDR): check before overwriting someone's edit |
 | `lvndr undo <id> [--run --plan-hash h \| --yes] [--field path]... [--include-conflicts] [--reason text]` | Preview the undo of one change (or only some of its fields), or write the previewed plan |
 | `lvndr batch <id>` | Everything the same actor did around a change, no gap over 10 minutes |
 | `lvndr undo-batch <id> [--run --plan-hash h \| --yes] [--flagged \| --group key] [--reason text]` | Preview or undo that batch, newest first (a job) |
