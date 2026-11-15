@@ -1,6 +1,23 @@
 # Changelog
 
-## Unreleased (2026-11-15): review and time
+## 0.3.0 (2026-11-15): review, time travel, agent QA, theme code, wider coverage
+
+- Agent QA: `lvndr_list_findings`, `lvndr_get_insights`, `lvndr_dismiss_finding`; findings per
+  change and run (zeroed or jumped prices, emptied or duplicated text, switched language, broken
+  HTML, SEO length, tug of war, `seo.missing_redirect`); pattern groups with the narrowing that
+  undoes only one group. CLI `findings`, `insights`, `run undo --flagged | --group`.
+- Run budgets: `lvndr_start_run` / `POST /runs` take `budget` (max records, kinds, max price
+  change, optional auto-undo of the excess); CLI `run start --max-records --only --max-price-change --auto-undo`.
+- Plain-language undo: `lvndr_plan_undo` / `POST /plan-undo` / `lvndr plan "..."`, then
+  `lvndr_undo_selection` with its token.
+- Theme code: `lvndr_theme_file_history`, `lvndr_theme_file_at`, `lvndr_theme_change_files`; CLI
+  `lvndr theme history|diff|restore` (restore through your own Shopify CLI).
+- Coverage: URL redirects, discounts and translations tracked and undoable; `lvndr_coverage` /
+  `GET /coverage` / `lvndr coverage` say what is tracked and what needs permission.
+- Toolfora suite: `lvndr_field_edits` / `GET /records/:record/edits` / `lvndr edits`: who last
+  wrote each field, so an agent never overwrites a person's edit.
+
+### Review and time
 
 - Proposals (store pull requests): `lvndr_propose_changes`, `POST /proposals`, `lvndr propose`
   propose field edits for the merchant to review instead of writing them (scope `read`). Review

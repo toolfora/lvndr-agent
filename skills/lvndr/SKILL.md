@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Needs the LVNDR Shopify app installed on the store, and either an MCP client that signs in with OAuth or an LVNDR API key (LVNDR_API_KEY); every LVNDR plan includes API access. Works through the LVNDR MCP server or the `lvndr` CLI (Node 20+); network access to the LVNDR app URL."
 metadata:
   author: HereNow Labs
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # lvndr: change a Shopify store safely

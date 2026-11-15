@@ -29,7 +29,7 @@ import { delimiter, dirname, join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 export const DEFAULT_URL = "https://lvndr.toolfora.com";
 export const EXIT = Object.freeze({ OK: 0, USAGE: 1, UNDO_FAILED: 2, AUTH: 3, NOT_FOUND: 4, RATE_LIMITED: 5, NETWORK: 6, CONFLICT: 7, PLAN_REQUIRED: 8 });
 

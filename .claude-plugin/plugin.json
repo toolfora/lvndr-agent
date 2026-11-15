@@ -1,7 +1,7 @@
 {
   "name": "lvndr",
   "displayName": "LVNDR by Toolfora",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Store time machine for Shopify: what changed in a store, who made it as far as Shopify says, and a precise undo. Mark a restore point before changing a store with any tool, verify what changed, undo by change, run or restore point.",
   "author": {
     "name": "Toolfora (HereNow Labs, Inc.)",
