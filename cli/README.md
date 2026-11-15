@@ -86,6 +86,7 @@ prints one command's usage.
 |---|---|
 | `lvndr me` | Shop, key label, scopes and plan |
 | `lvndr status` | Plan, tracked record counts, last activity check, pending deliveries |
+| `lvndr coverage` | What is tracked and undoable per record type; types that need a permission and the Shopify scopes to grant |
 | `lvndr changes [filters]` | Changes, newest first. Filters: `--since`, `--until`, `--type`, `--action`, `--resource-id`, `--actor`, `--q`, `--hide-undos`, `--run-id`, `--limit`, `--cursor` |
 | `lvndr change <id>` | One change with its diff and attribution tier |
 | `lvndr history <gid\|Type-digits>` | A record's stored versions and changes (`Product-123`, `gid://shopify/Product/123`) |
@@ -127,7 +128,7 @@ prints one command's usage.
 | `lvndr help [command]`, `lvndr <command> --help`, `lvndr --version` | All commands, or one command's usage |
 
 Time flags accept `30m`, `24h`, `7d`, `2w` or an ISO timestamp. `--type` takes `PRODUCT`,
-`COLLECTION`, `PAGE`, `BLOG`, `ARTICLE`, `MENU`, `THEME`, `METAFIELD_DEFINITION` in any case.
+`COLLECTION`, `PAGE`, `BLOG`, `ARTICLE`, `MENU`, `THEME`, `METAFIELD_DEFINITION`, `REDIRECT`, `DISCOUNT` in any case.
 For `run end`, `run show` and `run undo` the id defaults to `--run-id`, then `LVNDR_RUN_ID`, then
 the run saved by `run start`.
 

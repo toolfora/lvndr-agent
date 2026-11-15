@@ -29,6 +29,10 @@ Follow these steps every time you are about to write to a store, whatever tool d
 1. **Check access.** `lvndr_status` (CLI: `lvndr status`). If it fails with auth (CLI exit 3),
    stop and tell the user the key is missing, revoked or expired, or the app is not installed on
    the store. A 402 (CLI exit 8) means the store has no LVNDR plan that includes the API. New keys carry `read` and `undo`; `rollback` and `export` are opt-in.
+   About to touch discounts, translations or URL redirects? `lvndr_coverage` (CLI: `lvndr coverage`)
+   says whether LVNDR tracks them in this store: `needs_permission` means changes there are not
+   recorded and cannot be undone until the merchant allows access in the app, so say so before
+   you start.
 2. **Start a run with a restore point.** `lvndr_start_run` with `agent` (your name),
    `task` (one line: what you are about to do) and `markRestorePoint: true`. Keep the returned
    run id. CLI: `lvndr run start --agent <name> --task "<task>"` (prints the id; also
