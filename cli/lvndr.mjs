@@ -1137,16 +1137,20 @@ export async function verifyThemePush(readPlan, items) {
   } catch (error) {
     return { restored: [], notes: [], notBack: items.map((i) => ({ filename: i.filename, why: `could not read the store to confirm: ${error instanceof Error ? error.message : error}` })) };
   }
-  const live = new Map((after?.restore?.items ?? []).map((i) => [i.filename, i.current?.checksum ?? null]));
+  // filename -> the file now: null when the theme does not have it, checksum null when Shopify lists it without one.
+  const live = new Map((after?.restore?.items ?? []).map((i) => [i.filename, i.current ?? null]));
   const restored = [];
   const notBack = [];
   const notes = [];
   for (const i of items) {
-    const now = live.has(i.filename) ? live.get(i.filename) : undefined;
+    const cur = live.get(i.filename);
+    const now = cur?.checksum ?? null;
     const before = i.current?.checksum ?? null;
     if (now && (now === i.target?.checksum || now === md5Hex(i.content ?? ""))) restored.push(i.filename);
-    else if (now === undefined) notBack.push({ filename: i.filename, why: "LVNDR could not read it back" });
-    else if (now === before || now === null) notBack.push({ filename: i.filename, why: now === null ? "not in the theme" : "unchanged by the push" });
+    else if (!live.has(i.filename)) notBack.push({ filename: i.filename, why: "LVNDR could not read it back" });
+    else if (cur === null) notBack.push({ filename: i.filename, why: "not in the theme" });
+    else if (now === null) notBack.push({ filename: i.filename, why: "Shopify gives no checksum for it, so it could not be confirmed; check it in the code editor" });
+    else if (now === before) notBack.push({ filename: i.filename, why: "unchanged by the push" });
     else if (i.filename.endsWith(".json")) {
       restored.push(i.filename);
       notes.push(`${i.filename}: Shopify stored it re-formatted, so its checksum differs from the earlier file; check it in the code editor.`);
