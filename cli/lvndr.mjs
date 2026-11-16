@@ -1158,15 +1158,25 @@ export async function verifyThemePush(readPlan, items) {
 /** Write each file's earlier content under `dir` (only theme paths, only inside `dir`). */
 export function writeThemeFiles(dir, items) {
   const root = resolve(dir);
-  for (const d of THEME_DIRS) mkdirSync(join(root, d), { recursive: true });
-  for (const i of items) {
+  // Every file is checked before any is written, so a refusal leaves no half-written folder.
+  const byCase = new Map();
+  const targets = items.map((i) => {
     if (!isThemeFilePath(i.filename)) throw new CliError(`refusing to write ${JSON.stringify(i.filename)}: not a theme file path`);
     if (typeof i.content !== "string") throw new CliError(`LVNDR returned no earlier content for ${i.filename}`);
     const target = resolve(root, i.filename);
     if (!target.startsWith(root + sep)) throw new CliError(`refusing to write outside ${root}: ${i.filename}`);
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, i.content);
-  }
+    // Shopify file names are case-sensitive, macOS and Windows folders are not: one file would
+    // overwrite the other and be pushed under both names.
+    const other = byCase.get(i.filename.toLowerCase());
+    if (other) throw new CliError(`${other} and ${i.filename} differ only in case, so they cannot be written to one folder on every system; restore them one at a time with --file`);
+    byCase.set(i.filename.toLowerCase(), i.filename);
+    return target;
+  });
+  for (const d of THEME_DIRS) mkdirSync(join(root, d), { recursive: true });
+  items.forEach((i, n) => {
+    mkdirSync(dirname(targets[n]), { recursive: true });
+    writeFileSync(targets[n], i.content);
+  });
   return root;
 }
 
