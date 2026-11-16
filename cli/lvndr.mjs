@@ -1247,9 +1247,39 @@ export function changesCommand(flags, cursor) {
 }
 
 /** Runs one command; returns { result, human: string[], notes?: string[], list?, quietIds?, exitCode? }. */
+/**
+ * The narrowing flags each write command understands. Flags are parsed globally, so without this
+ * a flag the command does not read (`undo <id> --only Price`, `schedule run <id> --field title`)
+ * would be dropped and the write would cover everything instead of what was asked for.
+ */
+const NARROWING_FLAGS = ["field", "only", "exclude", "item"];
+const WRITE_NARROWING = {
+  undo: ["field"],
+  "undo-batch": ["only", "exclude"],
+  preview: ["only", "exclude"],
+  rollback: ["only", "exclude"],
+  "run undo": ["only", "exclude"],
+  "undo-selection": ["only", "exclude"],
+  proposal: ["item", "only"],
+  "restore-version": ["field"],
+  "schedule change": ["field"],
+  "schedule run": ["only", "exclude"],
+  "schedule batch": ["only", "exclude"],
+  "schedule rollback": ["only", "exclude"],
+};
+export function checkNarrowingFlags(command, args, flags) {
+  const key = command === "run" || command === "schedule" ? `${command} ${args[0] ?? ""}`.trim() : command;
+  const allowed = WRITE_NARROWING[key];
+  if (!allowed) return;
+  const stray = NARROWING_FLAGS.filter((f) => flags[f]?.length && !allowed.includes(f));
+  if (stray.length === 0) return;
+  throw new CliError(`lvndr ${key} does not take ${stray.map((f) => `--${f}`).join(" or ")}; it narrows with ${allowed.map((f) => `--${f}`).join(" and ")}. Nothing was sent, so nothing wider than you asked for ran.`);
+}
+
 async function dispatch(parsed, io) {
   const { command, args, flags } = parsed;
   if (command === "login") return login(parsed, io);
+  checkNarrowingFlags(command, args, flags);
   const ctx = resolveContext(flags, io.env);
   const enc = encodeURIComponent;
   switch (command) {
