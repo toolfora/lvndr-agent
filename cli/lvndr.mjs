@@ -945,9 +945,9 @@ async function waitForRun(ctx, id, through, waitS, io, { quiet = false } = {}) {
   }
 }
 
-/** Whether `command` can be started: a path to an executable file, or a name found on PATH. */
-export function commandExists(command, env = process.env) {
-  if (!command) return false;
+/** The file `command` starts: itself when it is a path, else the first match on PATH (with PATHEXT on Windows). Null when none. */
+export function resolveCommand(command, env = process.env, platform = process.platform) {
+  if (!command) return null;
   const isExe = (p) => {
     try {
       accessSync(p, fsConstants.X_OK);
@@ -956,13 +956,46 @@ export function commandExists(command, env = process.env) {
       return false;
     }
   };
-  if (command.includes("/") || command.includes("\\")) return isExe(command);
-  const exts = process.platform === "win32" ? (env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
-  for (const dir of String(env.PATH ?? "").split(delimiter)) {
-    if (!dir) continue;
-    for (const ext of exts) if (isExe(join(dir, command + ext))) return true;
+  const win = platform === "win32";
+  const pathExt = String(env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean);
+  // On Windows a bare name is only ever one of PATHEXT: npm also puts an extensionless sh shim
+  // (`shopify`) next to `shopify.cmd`, and that one cannot be started from Windows.
+  const named = pathExt.some((e) => command.toLowerCase().endsWith(e.toLowerCase()));
+  const exts = win ? (named ? [""] : pathExt) : [""];
+  if (command.includes("/") || command.includes("\\")) {
+    for (const ext of exts) if (isExe(command + ext)) return command + ext;
+    return null;
   }
-  return false;
+  for (const dir of String(env.PATH ?? env.Path ?? "").split(win ? ";" : delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) if (isExe(join(dir, command + ext))) return join(dir, command + ext);
+  }
+  return null;
+}
+
+/** Whether `command` can be started: a path to an executable file, or a name found on PATH. */
+export function commandExists(command, env = process.env, platform = process.platform) {
+  return resolveCommand(command, env, platform) !== null;
+}
+
+// cmd.exe quoting, as cross-spawn does it: quote each argument, then caret-escape the characters
+// cmd.exe reads as syntax (quotes, %, &, parentheses, spaces ...), so a path with a space or a
+// percent sign reaches the program as one literal argument.
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+const cmdArg = (arg) => `"${String(arg).replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`.replace(CMD_META, "^$1");
+
+/**
+ * How to start `bin args`. On Windows, Shopify CLI installed with npm is a `shopify.cmd` shim,
+ * which Node cannot spawn directly (ENOENT without a shell; EINVAL since the 2024 .cmd hardening),
+ * so it runs through cmd.exe with every argument escaped, never through a shell string we build
+ * loosely. Elsewhere the binary is spawned as is.
+ */
+export function spawnPlan(bin, args, env = process.env, platform = process.platform) {
+  if (platform !== "win32") return { file: bin, args, options: {} };
+  const resolved = resolveCommand(bin, env, platform) ?? bin;
+  if (!/\.(cmd|bat)$/i.test(resolved)) return { file: resolved, args, options: {} };
+  const line = [resolved.replace(CMD_META, "^$1"), ...args.map(cmdArg)].join(" ");
+  return { file: env.ComSpec || env.COMSPEC || "cmd.exe", args: ["/d", "/s", "/c", `"${line}"`], options: { windowsVerbatimArguments: true } };
 }
 
 async function guard(ctx, parsed, io) {
@@ -1154,7 +1187,8 @@ export function pushEnv(env) {
 
 function runShopify(bin, args, env) {
   return new Promise((resolveExit) => {
-    const child = spawn(bin, args, { stdio: "inherit", env: pushEnv(env) });
+    const plan = spawnPlan(bin, args, env);
+    const child = spawn(plan.file, plan.args, { stdio: "inherit", env: pushEnv(env), ...plan.options });
     child.once("error", (e) => resolveExit({ code: 127, error: e.message }));
     child.once("exit", (code, signal) => resolveExit({ code: code ?? 128 + (osConstants.signals[signal] ?? 0) }));
   });
