@@ -1230,6 +1230,13 @@ async function themeRestore(ctx, args, flags, io) {
     }
     if (!commandExists(bin, ctx.env)) throw new CliError(`Shopify CLI not found (${bin}). Install it (npm install -g @shopify/cli), log in to ${r.shop}, then run this again; or write the files with --out <dir> and push them yourself.`, 127);
     const dir = mkdtempSync(join(tmpdir(), "lvndr-theme-"));
+    // Ctrl-C mid-push ends this process before `finally` runs: remove the earlier files first.
+    const onSignal = (signal) => {
+      rmSync(dir, { recursive: true, force: true });
+      process.exit(signal === "SIGINT" ? 130 : 143);
+    };
+    process.once("SIGINT", onSignal);
+    process.once("SIGTERM", onSignal);
     try {
       writeThemeFiles(dir, items);
       const pushed = items.map((i) => i.filename);
@@ -1252,6 +1259,8 @@ async function themeRestore(ctx, args, flags, io) {
         quietIds: pushed,
       };
     } finally {
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
       rmSync(dir, { recursive: true, force: true });
     }
   };
