@@ -1108,9 +1108,19 @@ export function pushArgs(dir, shop, theme, files) {
   return ["theme", "push", "--path", dir, "--store", shop, "--theme", String(theme.numericId), ...files.flatMap((f) => ["--only", f]), "--nodelete", ...(theme.role === "MAIN" ? ["--allow-live"] : [])];
 }
 
+/**
+ * The environment for `shopify theme push`: everything but SHOPIFY_FLAG_* variables. Shopify CLI
+ * reads every flag from one (SHOPIFY_FLAG_PUBLISH, _IGNORE, _LISTING, _ENVIRONMENT, ...), so a
+ * developer's shell could publish the theme, skip a restored file or push preset files on top
+ * of the plan. The push gets exactly the flags LVNDR passes; auth (SHOPIFY_CLI_THEME_TOKEN) stays.
+ */
+export function pushEnv(env) {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !/^SHOPIFY_FLAG_/i.test(k)));
+}
+
 function runShopify(bin, args, env) {
   return new Promise((resolveExit) => {
-    const child = spawn(bin, args, { stdio: "inherit", env });
+    const child = spawn(bin, args, { stdio: "inherit", env: pushEnv(env) });
     child.once("error", (e) => resolveExit({ code: 127, error: e.message }));
     child.once("exit", (code, signal) => resolveExit({ code: code ?? 128 + (osConstants.signals[signal] ?? 0) }));
   });
