@@ -1085,6 +1085,8 @@ function themeRestoreLines(r, color, includeConflicts) {
 }
 
 const restorable = (plan, includeConflicts) => (plan?.items ?? []).filter((i) => i.status === "ready" || (includeConflicts && i.status === "conflict"));
+/** The hash that binds a push to what the preview showed: files changed since only when the preview included them. */
+const planHashFor = (plan, includeConflicts) => (includeConflicts ? plan?.planHashWithConflicts : plan?.planHash);
 
 /** Write each file's earlier content under `dir` (only theme paths, only inside `dir`). */
 export function writeThemeFiles(dir, items) {
@@ -1165,7 +1167,7 @@ async function themeRestore(ctx, args, flags, io) {
   if (flags.run) {
     if (!flags.planHash) throw new CliError(`preview first: ${previewCommand} (it prints the --plan-hash to pass; or --yes at a terminal)`);
     const r = await fetchPlan(true);
-    if (r.restore?.planHash !== flags.planHash) {
+    if (!r.restore || planHashFor(r.restore, includeConflicts) !== flags.planHash) {
       throw new CliError(`plan_changed: the theme moved since that preview (or the files differ), so nothing was pushed. Preview again: ${previewCommand}`, EXIT.CONFLICT, { code: "plan_changed" });
     }
     return push(r);
@@ -1182,7 +1184,7 @@ async function themeRestore(ctx, args, flags, io) {
       ...lines,
       "",
       "preview only; nothing was written.",
-      `To push exactly this plan: lvndr theme restore ${id} --run --plan-hash ${r.restore.planHash}${fileArgs}${includeConflicts ? " --include-conflicts" : ""}`,
+      `To push exactly this plan: lvndr theme restore ${id} --run --plan-hash ${planHashFor(r.restore, includeConflicts)}${fileArgs}${includeConflicts ? " --include-conflicts" : ""}`,
       ...(conflicts && !includeConflicts ? [`${conflicts} file(s) changed again since; add --include-conflicts to put them back too.`] : []),
       "Or write the files to a folder instead: add --out <dir>",
     ],

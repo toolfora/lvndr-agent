@@ -57,7 +57,7 @@ tools read, and the restore runs through the merchant's own Shopify CLI.
 |---|---|---|
 | `lvndr_theme_file_history` | A theme's changes, or one file's, newest first, each with the files it added, removed or modified | `themeId` (digits as Shopify CLI shows them, or OnlineStoreTheme-123), `file` (e.g. sections/header.liquid), `limit`, `cursor` |
 | `lvndr_theme_file_at` | One file's full content before (default) or after a change, at a stored version, or at the last check | `file`, `themeId` or `changeId`, `side` (before, after), `version` |
-| `lvndr_theme_change_files` | The files one theme change touched with a unified diff each, and `restore`: per file ready, conflict, noop or unsupported, the diff from the file now to its earlier content, `planHash` and `commands` | `id` (a change to a theme), `files`, `live` (compare with the store now) |
+| `lvndr_theme_change_files` | The files one theme change touched with a unified diff each, and `restore`: per file ready, conflict, noop or unsupported, the diff from the file now to its earlier content, `planHash` (`planHashWithConflicts` for a restore with --include-conflicts) and `commands` | `id` (a change to a theme), `files`, `live` (compare with the store now) |
 
 To put theme files back after you broke them: call `lvndr_theme_change_files` with `live: true`,
 show the merchant the restore diff, then run (or ask them to run) `restore.commands.restore`
