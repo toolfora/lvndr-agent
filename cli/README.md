@@ -174,7 +174,7 @@ The preview lists each file as `will restore`, `changed since` (only with `--inc
 only the chosen files to a temporary folder and runs
 `shopify theme push --store <shop> --theme <id> --only <file>... --nodelete` (plus `--allow-live`
 for the live theme), so nothing else in the theme changes and nothing is deleted; the folder is
-removed afterwards. Exit 2 when the push fails, 127 when Shopify CLI is not installed. LVNDR's next
+removed afterwards. Afterwards it reads the store again: exit 2 when the push fails or any pushed file is not back (Shopify CLI exits 0 on a partial upload), 127 when Shopify CLI is not installed. LVNDR's next
 theme check (within 10 minutes) records the restore as a change of its own.
 
 ### Global flags

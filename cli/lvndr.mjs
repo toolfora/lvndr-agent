@@ -22,7 +22,7 @@
  * plan lacks the API (402). The module also exports its helpers for tests.
  */
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { accessSync, chmodSync, constants as fsConstants, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { constants as osConstants, homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve, sep } from "node:path";
@@ -735,7 +735,7 @@ const DETAIL = {
   "run list": "Recent agent runs.",
   "theme diff": "What a theme change did to each file (line diffs), and what `lvndr theme restore` would put back. --file <path> (repeatable): only those files.",
   "theme restore":
-    "Put theme files back as they were before a change, through your own Shopify CLI (LVNDR cannot write theme files itself; Shopify allows that only to exempted apps).\nWithout flags: preview (writes nothing): each file ready, changed since, already back or not restorable, with the diff from the file now to its earlier content, and the line that pushes exactly that plan.\n--run --plan-hash <h>: push the previewed plan; refused (exit 7) if a file moved since.\n--yes: for a person at a terminal: preview, ask, then push.\n--include-conflicts: also put back files changed again since the change.\n--out <dir>: write the earlier files to <dir> and print the push line instead of pushing.\nThe push runs `shopify theme push --store <shop> --theme <id> --only <file>... --nodelete` (plus --allow-live for the live theme) from a temporary folder holding only those files; Shopify CLI must be installed and logged in to the store (LVNDR_SHOPIFY_CLI names another binary).",
+    "Put theme files back as they were before a change, through your own Shopify CLI (LVNDR cannot write theme files itself; Shopify allows that only to exempted apps).\nWithout flags: preview (writes nothing): each file ready, changed since, already back or not restorable, with the diff from the file now to its earlier content, and the line that pushes exactly that plan.\n--run --plan-hash <h>: push the previewed plan; refused (exit 7) if a file moved since; exit 2 if the push fails or a file is not back in the store afterwards.\n--yes: for a person at a terminal: preview, ask, then push.\n--include-conflicts: also put back files changed again since the change.\n--out <dir>: write the earlier files to <dir> and print the push line instead of pushing.\nThe push runs `shopify theme push --store <shop> --theme <id> --only <file>... --nodelete` (plus --allow-live for the live theme) from a temporary folder holding only those files; Shopify CLI must be installed and logged in to the store (LVNDR_SHOPIFY_CLI names another binary).",
   "theme history": "A theme's changes, newest first (the theme id as Shopify CLI shows it), or with --file only the changes to that file.",
   "run undo":
     "Without flags: preview undoing every change tagged with the run.\n--run --plan-hash <h>: queue that plan as a background job and wait for it.\n--yes: for a person at a terminal: preview, ask, then run it.",
@@ -1088,6 +1088,40 @@ const restorable = (plan, includeConflicts) => (plan?.items ?? []).filter((i) =>
 /** The hash that binds a push to what the preview showed: files changed since only when the preview included them. */
 const planHashFor = (plan, includeConflicts) => (includeConflicts ? plan?.planHashWithConflicts : plan?.planHash);
 
+const md5Hex = (text) => createHash("md5").update(text, "utf8").digest("hex");
+
+/**
+ * After a push: which files the store now holds as restored. A file is back when its live
+ * checksum is the earlier content's (or the md5 of what was written: an earlier version rebuilt
+ * from parsed JSON). Unchanged, or gone, means the push did not land it. Anything else is
+ * another content: for a JSON file Shopify may have re-formatted what it stored (noted);
+ * otherwise someone else wrote it meanwhile, and it does not count as restored.
+ */
+export async function verifyThemePush(readPlan, items) {
+  let after;
+  try {
+    after = await readPlan();
+  } catch (error) {
+    return { restored: [], notes: [], notBack: items.map((i) => ({ filename: i.filename, why: `could not read the store to confirm: ${error instanceof Error ? error.message : error}` })) };
+  }
+  const live = new Map((after?.restore?.items ?? []).map((i) => [i.filename, i.current?.checksum ?? null]));
+  const restored = [];
+  const notBack = [];
+  const notes = [];
+  for (const i of items) {
+    const now = live.has(i.filename) ? live.get(i.filename) : undefined;
+    const before = i.current?.checksum ?? null;
+    if (now && (now === i.target?.checksum || now === md5Hex(i.content ?? ""))) restored.push(i.filename);
+    else if (now === undefined) notBack.push({ filename: i.filename, why: "LVNDR could not read it back" });
+    else if (now === before || now === null) notBack.push({ filename: i.filename, why: now === null ? "not in the theme" : "unchanged by the push" });
+    else if (i.filename.endsWith(".json")) {
+      restored.push(i.filename);
+      notes.push(`${i.filename}: Shopify stored it re-formatted, so its checksum differs from the earlier file; check it in the code editor.`);
+    } else notBack.push({ filename: i.filename, why: "it now holds other content than was pushed (edited meanwhile?)" });
+  }
+  return { restored, notBack, notes };
+}
+
 /** Write each file's earlier content under `dir` (only theme paths, only inside `dir`). */
 export function writeThemeFiles(dir, items) {
   const root = resolve(dir);
@@ -1154,9 +1188,19 @@ async function themeRestore(ctx, args, flags, io) {
       io.stderr.write(`lvndr: pushing ${pushed.length} file(s) to ${themeLabel(plan.theme)} with ${bin} theme push\n`);
       const exit = await runShopify(bin, pushArgs(dir, r.shop, plan.theme, pushed), ctx.env ?? process.env);
       if (exit.code !== 0) throw new CliError(`shopify theme push exited ${exit.code}${exit.error ? ` (${exit.error})` : ""}; check its output above. Preview again with \`${previewCommand}\` before retrying.`, EXIT.UNDO_FAILED, { pushExitCode: exit.code });
+      // Shopify CLI exits 0 when some uploads failed (status "partial"), and skips files a
+      // .shopifyignore names: read the store again and call a file restored only when it is back.
+      const check = await verifyThemePush(() => fetchPlan(false), items);
+      if (check.notBack.length) {
+        throw new CliError(
+          `shopify theme push finished, but ${check.notBack.length} file(s) are not back on ${themeLabel(plan.theme)}: ${check.notBack.map((f) => `${f.filename} (${f.why})`).join(", ")}. ${check.restored.length ? `Back: ${check.restored.join(", ")}. ` : ""}Check the push output above, then preview again with \`${previewCommand}\`.`,
+          EXIT.UNDO_FAILED,
+          { code: "push_incomplete", restored: check.restored, notRestored: check.notBack },
+        );
+      }
       return {
-        result: { ...r, pushed },
-        human: [`Restored ${pushed.length} file(s) on ${themeLabel(plan.theme)}: ${pushed.join(", ")}.`, "LVNDR's next theme check (within 10 minutes) records the restore as a change, so it can be undone too."],
+        result: { ...r, pushed, verified: check.restored, notes: check.notes },
+        human: [`Restored ${pushed.length} file(s) on ${themeLabel(plan.theme)}: ${pushed.join(", ")}.`, ...check.notes, "LVNDR's next theme check (within 10 minutes) records the restore as a change, so it can be undone too."],
         quietIds: pushed,
       };
     } finally {
