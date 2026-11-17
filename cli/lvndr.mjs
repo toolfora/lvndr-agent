@@ -50,10 +50,10 @@ const VALUE_FLAGS = new Set([
   "key", "url", "profile", "agent", "run-id", "reason", "task", "client-id", "format", "since", "until",
   "out", "limit", "cursor", "type", "action", "resource-id", "actor", "q", "status", "wait", "timeout",
   "plan-hash", "kind", "field", "only", "exclude", "at", "item", "title", "note", "file",
-  "max-records", "max-price-change", "group", "batch", "change-id",
+  "max-records", "max-price-change", "group", "batch", "change-id", "store", "stores", "store-plan",
 ]);
 /** Value flags that may be given more than once; they collect into an array. */
-const REPEATABLE_FLAGS = new Set(["field", "only", "exclude", "item", "file"]);
+const REPEATABLE_FLAGS = new Set(["field", "only", "exclude", "item", "file", "store-plan"]);
 const SHORT_FLAGS = { h: "help", q: "quiet", v: "version" };
 
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -329,6 +329,8 @@ export function resolveContext(flags, env = process.env, { allowMissingProfile =
     key: flags.key || env.LVNDR_API_KEY || profile?.key,
     agent: flags.agent || env.LVNDR_AGENT || profile?.agent || "lvndr-cli",
     runId: flags.runId || env.LVNDR_RUN_ID || undefined,
+    // A connected store to act on instead of the key's own (workspaces); sent as X-Lvndr-Store.
+    store: flags.store || env.LVNDR_STORE || undefined,
     retry: !flags.noRetry,
     timeoutMs: flags.timeout ? Number(flags.timeout) * 1000 : 120_000,
   };
@@ -378,6 +380,7 @@ export async function request(ctx, method, path, { body, query, raw = false, aut
   const headers = { Accept: raw ? "*/*" : "application/json", "User-Agent": `lvndr-cli/${VERSION}`, "X-Lvndr-Agent": ctx.agent };
   if (ctx.key) headers.Authorization = `Bearer ${ctx.key}`;
   if (ctx.runId) headers["X-Lvndr-Run-Id"] = ctx.runId;
+  if (ctx.store) headers["X-Lvndr-Store"] = ctx.store;
   if (method !== "GET") {
     headers["Content-Type"] = "application/json";
     headers["Idempotency-Key"] = randomUUID(); // same key on every retry of this call
@@ -691,6 +694,16 @@ export const USAGE = Object.freeze({
   proposals: "proposals [--status open|applied|partly-applied|rejected|expired|all] [--limit 50]",
   proposal: "proposal <id>  |  proposal <id> --apply --plan-hash <h> [--item <itemId>]... [--only <kind>]... [--include-conflicts]  |  proposal <id> --reject [--reason text]",
   compare: "compare <gid|Type-digits> <fromVersion> <toVersion>",
+  stores: "stores",
+  hub: "hub [--stores <domain>] [--type PRODUCT] [--kind agent|app|staff] [--q text] [--limit 50] [--cursor c]",
+  "fleet start": "fleet start [--task text] [--agent name] [--stores a.myshopify.com,b.myshopify.com|all] [--no-restore-point]",
+  "fleet end": "fleet end <fleetRunId>",
+  "fleet show": "fleet show <fleetRunId>",
+  "fleet runs": "fleet runs [--limit 20]",
+  "fleet undo": "fleet undo <fleetRunId>  |  fleet undo <fleetRunId> --run --store-plan <store>=<planHash>...  |  fleet undo <fleetRunId> --yes",
+  "fleet mark": "fleet mark <label...> [--stores a,b|all]",
+  "fleet points": "fleet points [--limit 20]",
+  "fleet restore": "fleet restore <pointId>  |  fleet restore <pointId> --run --store-plan <store>=<planHash>...  |  fleet restore <pointId> --yes",
   "restore-version": "restore-version <gid|Type-digits> <version> [--field <path>]...  |  restore-version <record> <version> --run --plan-hash <h> [--field <path>]...  |  restore-version <record> <version> --yes",
   schedule: "schedule change|run|batch|rollback <id> --at <+2h|+3d|ISO> [--field <path>]... [--only <kind>]... [--exclude <changeId>]... [--include-conflicts]  |  schedule <kind> <id> --at <when> --plan-hash <h> [same narrowing]",
   scheduled: "scheduled [--all | --status scheduled|done|skipped|failed|cancelled] [--limit 50]",
@@ -762,11 +775,90 @@ export function commandHelp(topic) {
   if (name === "run" || name === "runs") {
     return ["Usage:", ...Object.keys(USAGE).filter((k) => k.startsWith("run ")).map((k) => `  lvndr ${USAGE[k]}`), "", "Agent runs: announce, review and undo a unit of agent work."].join("\n");
   }
+  if (name === "fleet") {
+    return ["Usage:", ...Object.keys(USAGE).filter((k) => k.startsWith("fleet ")).map((k) => `  lvndr ${USAGE[k].split("  |  ")[0]}`), "", "Across a workspace: one agent run or restore point on many stores; undo and restore preview each store and write each with its own plan.", "Any other command acts on one connected store with --store <domain>."].join("\n");
+  }
   if (name === "theme") {
     return ["Usage:", ...Object.keys(USAGE).filter((k) => k.startsWith("theme ")).map((k) => `  lvndr ${USAGE[k].split("  |  ")[0]}`), "", "Theme code: every file of the live and unpublished themes, diffs per file, and restore through your own Shopify CLI.", "lvndr theme <diff|restore|history> --help for one."].join("\n");
   }
   if (!USAGE[name]) return null;
-  return [`Usage: lvndr ${USAGE[name].split("  |  ").join("\n       lvndr ")}`, "", DETAIL[name] ?? "", "", "Global options: --json --ndjson --quiet --key --url --profile --agent --run-id --no-retry --timeout"].join("\n");
+  return [`Usage: lvndr ${USAGE[name].split("  |  ").join("\n       lvndr ")}`, "", DETAIL[name] ?? "", "", "Global options: --json --ndjson --quiet --key --url --profile --agent --run-id --store --no-retry --timeout"].join("\n");
+}
+
+
+/** `--stores a,b` or "all" (default). */
+function storesFlag(flags) {
+  if (!flags.stores || flags.stores === "all") return "all";
+  return String(flags.stores).split(",").map((x) => x.trim()).filter(Boolean);
+}
+
+/** `--store-plan shop=hash` (repeatable) as the { shop: planHash } map a fleet write takes. */
+function storePlans(flags) {
+  const out = {};
+  for (const pair of flags.storePlan ?? []) {
+    const i = pair.indexOf("=");
+    if (i < 1) throw new CliError(`--store-plan takes <store>=<planHash>, got "${pair}"`);
+    out[pair.slice(0, i)] = pair.slice(i + 1);
+  }
+  return out;
+}
+
+function fleetPreviewLines(r) {
+  const rows = (r.stores ?? []).map((s) => [s.shop, s.refused ? "-" : `${s.planned} of ${s.total}`, s.refused ?? (s.planHash ? "ready" : "nothing to write")]);
+  return table([["STORE", 44], ["WOULD WRITE", 12], ["STATUS", 0]], rows);
+}
+
+/** Fleet runs and restore points across a workspace: start/end/show/list, undo, mark, restore. */
+async function fleetCommand(ctx, args, flags, io) {
+  const action = args[0];
+  const id = args[1];
+  const enc = encodeURIComponent;
+  if (action === "start") {
+    const agent = flags.agent ?? ctx.agent;
+    const r = await request({ ...ctx, agent }, "POST", "/fleet/runs", { body: { agent, task: flags.task, stores: storesFlag(flags), markRestorePoint: !flags.noRestorePoint } });
+    return { result: r, human: [`fleet run ${r.id} on ${r.stores.length} store${r.stores.length === 1 ? "" : "s"}`, ...r.stores.map((s) => `  ${s.shop}  run ${s.runId}`), `end it: lvndr fleet end ${r.id}`, `undo it: lvndr fleet undo ${r.id}`], quietIds: [r.id] };
+  }
+  if (action === "end" || action === "show") {
+    need(args, 2, USAGE[`fleet ${action}`]);
+    const r = await request(ctx, action === "end" ? "POST" : "GET", `/fleet/runs/${enc(id)}${action === "end" ? "/end" : ""}`);
+    const human = [`${r.agent}${r.task ? ` · ${r.task}` : ""} · ${r.changes} change${r.changes === 1 ? "" : "s"}${r.endedAt ? " · ended" : ""}`, ...table([["STORE", 44], ["RUN", 26], ["CHANGES", 0]], r.stores.map((s) => [s.shop, s.runId, String(s.changes)]))];
+    return { result: r, human, quietIds: [r.id] };
+  }
+  if (action === "runs" || action === "points") {
+    const r = await request(ctx, "GET", `/fleet/${action}`, { query: { limit: parseLimit(flags.limit) } });
+    const list = r[action] ?? [];
+    const human = action === "runs" ? table([["ID", 26], ["STARTED", 26], ["STORES", 7], ["AGENT", 0]], list.map((x) => [x.id, when(x.startedAt), String(x.stores), `${x.agent}${x.task ? ` · ${x.task}` : ""}`])) : table([["ID", 26], ["AT", 26], ["STORES", 7], ["LABEL", 0]], list.map((x) => [x.id, when(x.at), String(x.stores), x.label]));
+    if (!list.length) human.push(`no fleet ${action}`);
+    return { result: r, human, list, quietIds: list.map((x) => x.id) };
+  }
+  if (action === "mark") {
+    const label = args.slice(1).join(" ") || undefined;
+    const r = await request(ctx, "POST", "/fleet/points", { body: { label, stores: storesFlag(flags) } });
+    return { result: r, human: [`marked ${r.id} on ${r.stores.length} store${r.stores.length === 1 ? "" : "s"}${r.label ? `  ${r.label}` : ""}`], quietIds: [r.id] };
+  }
+  if (action === "undo" || action === "restore") {
+    need(args, 2, USAGE[`fleet ${action}`]);
+    const base = action === "undo" ? `/fleet/runs/${enc(id)}` : `/fleet/points/${enc(id)}`;
+    const preview = await request(ctx, "GET", `${base}/preview`);
+    const offered = preview.confirm ?? {};
+    const writeLine = `lvndr fleet ${action} ${id} --run ${Object.entries(offered).map(([s, h]) => `--store-plan ${s}=${h}`).join(" ")}`;
+    let plans = flags.run ? storePlans(flags) : null;
+    if (flags.run && !Object.keys(plans).length) throw new CliError(`--run needs the --store-plan values the preview prints. Preview first: lvndr fleet ${action} ${id}`);
+    if (!flags.run) {
+      if (!Object.keys(offered).length) return { result: preview, human: [...fleetPreviewLines(preview), "Nothing to write on any store; nothing was written."] };
+      if (!flags.yes) return { result: preview, human: [...fleetPreviewLines(preview), "preview only; nothing was written.", `To write exactly this: ${writeLine}`, "(drop a --store-plan to leave that store alone)"] };
+      if (!(io.stdin ?? process.stdin).isTTY) throw new CliError(`--yes is for a person at a terminal. Use: ${writeLine}`);
+      for (const line of fleetPreviewLines(preview)) (io.stdout ?? process.stdout).write(`${line}\n`);
+      if (!(await confirm(`${action === "undo" ? "Undo" : "Restore"} on ${Object.keys(offered).length} store(s)? [y/N] `, io))) return { result: preview, human: ["Nothing was written."] };
+      plans = offered;
+    }
+    const r = await request(ctx, "POST", action === "undo" ? `${base}/undo` : `${base}/restore`, { body: action === "undo" ? { stores: plans } : { stores: plans, confirm: true } });
+    const outcomes = r.stores ?? [];
+    const failed = outcomes.some((o) => !o.jobId);
+    const human = outcomes.map((o) => (o.jobId ? `${o.shop}  queued job ${o.jobId}  (lvndr job ${o.jobId} --store ${o.shop})` : `${o.shop}  not written: ${o.error}`));
+    return { result: r, human, quietIds: outcomes.filter((o) => o.jobId).map((o) => o.jobId), exitCode: failed ? EXIT.CONFLICT : EXIT.OK };
+  }
+  throw new CliError(commandHelp("fleet"));
 }
 
 const HELP = `lvndr ${VERSION}: Shopify store change log, undo and restore points
@@ -830,6 +922,15 @@ Theme code (restored through your own Shopify CLI, which must be logged in to th
   theme restore <changeId> --run --plan-hash <h> push the earlier files (shopify theme push)
   theme restore <changeId> --out <dir>           write the earlier files to a folder instead
 
+Workspaces (a store with connected stores; any command takes --store <domain>)
+  stores                               connected stores, their health and what each allows
+  hub [--stores d] [--kind agent]      one change log across every store
+  fleet start [--task t] [--stores a,b|all]      a run (and restore point) on many stores
+  fleet end|show <id> | fleet runs     end, show or list fleet runs
+  fleet undo <id> [--run --store-plan s=h...]    preview each store, then undo the stores you keep
+  fleet mark <label> | fleet points    a restore point on many stores; list them
+  fleet restore <pointId> [--run --store-plan s=h...]
+
 Setup
   login [--key lv_... | --with-token] [--url URL] [--profile name] [--no-verify]
                                        asks for the key without echoing it; --with-token reads stdin
@@ -837,6 +938,7 @@ Setup
 Global options
   --json  compact JSON on stdout     --ndjson  one JSON object per line for lists
   --quiet  ids only                  --key, --url, --profile, --agent (X-Lvndr-Agent), --run-id
+  --store <domain>  act on a connected store (X-Lvndr-Store; LVNDR_STORE)
   --no-retry  fail on 429 at once    --timeout <seconds>     --reason <text> on writes
 
 Exit codes: 0 ok, 1 usage/other, 2 undo partial or failed, 3 auth (401/403), 4 not found,
@@ -1851,6 +1953,22 @@ async function dispatch(parsed, io) {
     }
     case "theme":
       return themeCommand(ctx, args, flags, io);
+    case "stores": {
+      const r = await request(ctx, "GET", "/stores");
+      const list = r.stores ?? [];
+      const human = table([["STORE", 44], ["HEALTH", 9], ["ALERTS", 7], ["ALLOWS", 0]], list.map((s) => [s.shop, s.health, String(s.openAlerts), ["read", s.grants?.undo ? "undo" : null, s.grants?.restore ? "restore" : null].filter(Boolean).join(", ")]));
+      if (!list.length) human.push("no connected stores; connect them in lvndr > Settings > Other stores");
+      return { result: r, human, list, quietIds: list.map((s) => s.shop), notes: list.length ? ["any command acts on one of these with --store <domain>"] : [] };
+    }
+    case "hub": {
+      const r = await request(ctx, "GET", "/hub/changes", { query: { store: flags.stores, type: flags.type, kind: flags.kind, q: flags.q, cursor: flags.cursor, limit: parseLimit(flags.limit, 200) } });
+      const list = r.changes ?? [];
+      const human = table([["WHEN", 26], ["STORE", 30], ["ACTION", 8], ["RECORD", 0]], list.map((c) => [when(c.occurredAt), c.shop.replace(/\.myshopify\.com$/, ""), c.action, `${c.resourceType} ${c.resourceTitle ?? c.resourceId}`]));
+      if (!list.length) human.push("no changes");
+      return { result: r, human, list, quietIds: list.map((c) => c.id), notes: r.nextCursor ? [`more: lvndr hub --cursor ${r.nextCursor}`] : [] };
+    }
+    case "fleet":
+      return fleetCommand(ctx, args, flags, io);
     case "export": {
       const text = await request(ctx, "GET", "/export", { raw: true, query: { format: flags.format, since: toIso(flags.since), until: toIso(flags.until) } });
       if (flags.out) {

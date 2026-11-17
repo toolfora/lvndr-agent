@@ -83,6 +83,18 @@ cannot be pushed back (delete it in the code editor); binary files cannot either
 | `lvndr_cancel_scheduled_undo` | undo | Cancel a scheduled undo before it runs | `id` |
 | `lvndr_undo_selection` | undo | Undo every change matching change-log filters, newest first, as `lvndr_plan_undo` planned it. Returns a background `job` | `filters` (from writeWith.arguments), `confirmation_token` (required, from lvndr_plan_undo), `reason`, `runId`, `excludeChangeIds`, `fieldKinds` |
 | `lvndr_dismiss_finding` | undo | Dismiss a QA finding once it is explained or undone (a read-only key cannot) | `id` |
+| `lvndr_list_stores` | read | Stores connected to this one (a workspace), with health and what each allowed; any other tool acts on one with `store` |  |
+| `lvndr_hub_changes` | read | One change log across every store in the workspace, newest first | `store_filter`, `type`, `kind` (agent, app, staff), `q`, `cursor`, `limit` |
+| `lvndr_start_fleet_run` | read | Start a run (and restore point) on many stores, grouped as one fleet run; writes only to LVNDR | `task` (required), `agent`, `stores` ("all" or a list), `markRestorePoint`, `budget` |
+| `lvndr_get_fleet_run` | read | One fleet run: each store's run id, changes and latest undo | `id` |
+| `lvndr_end_fleet_run` | read | End the fleet run on every store | `id` |
+| `lvndr_preview_fleet_undo` | read | Plan undoing a fleet run on each store; returns `confirm` and a `confirmation_token` | `id` |
+| `lvndr_undo_fleet_run` | undo | Undo a fleet run on the confirmed stores, each its own job bound to its preview | `id`, `confirm`, `confirmation_token` (required, from lvndr_preview_fleet_undo), `only_stores`, `reason` |
+| `lvndr_mark_fleet_point` | read | Mark a restore point on many stores at once; writes only to LVNDR | `label`, `stores` |
+| `lvndr_preview_fleet_restore` | read | Plan restoring each store to a fleet restore point; returns `confirm` and a `confirmation_token` | `id` |
+| `lvndr_restore_fleet_point` | rollback | Restore the confirmed stores to a fleet restore point, each its own job | `id`, `confirm`, `confirmation_token` (required, from lvndr_preview_fleet_restore), `only_stores`, `reason` |
+
+Workspaces: every tool except the workspace ones (`lvndr_list_stores`, `lvndr_hub_changes` and the `*_fleet_*` tools) takes `store`, a connected store's domain, and then acts on that store; it is refused unless that store allowed it (reading, undo for one change, restore for runs, batches, selections and rollbacks). A fleet preview returns `confirm` (`{store: planHash}`) and one token; pass both back unchanged, with `only_stores` to write fewer. Poll each store's job with `lvndr_get_job` and its `store`.
 
 Every store write needs the `confirmation_token` from its preview: 10 minutes, single use, bound
 to the key, the target and what the preview saw. There is no `confirm` or `dryRun` shortcut. A
