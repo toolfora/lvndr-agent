@@ -20,9 +20,9 @@ From a checkout of [toolfora/lvndr-agent](https://github.com/toolfora/lvndr-agen
 Create a key in the app: **LVNDR > Settings > Agents & API** (starts with `lv_`, shown once). A
 key has scopes: `read`, `undo`, `rollback`, `export`. New keys get `read` and `undo`; tick
 `rollback` (roll the store back to a restore point) and `export` (download the change log) when
-the key needs them. Marking a restore point and starting a run need only `read`. The API, MCP and this CLI are included on every LVNDR plan and free on development
-stores; requests per minute per key follow the plan (reads/writes: Starter 60/10, Growth 120/20,
-Scale 300/60, development stores 120/20 once billing is on; during early access every store gets
+the key needs them. Marking a restore point and starting a run need only `read`. The API, MCP and this CLI come with the Growth, Pro and Agency plans and are free on development
+stores; requests per minute per key follow the plan (reads/writes: Growth 120/20, Pro and Agency
+300/60, development stores 120/20 once billing is on; during early access every store gets
 the top rate, 300/60).
 
 ```sh

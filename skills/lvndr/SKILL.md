@@ -133,11 +133,11 @@ certain, and never read `unknown` as "nobody". LVNDR's own undos are always `exa
 | What you see | What to do |
 |---|---|
 | 401, 403 (CLI exit 3), or a tool result "This key lacks the ... scope" | Stop. Key missing, revoked or expired, a scope missing (read, undo, rollback, export), or 403 `not_installed` (the app is not installed on the store). Tell the user; a key with the scope is made in LVNDR Settings > Agents & API. |
-| 402 (CLI exit 8) | The store has no active LVNDR plan with the API. Tell the user. |
+| 402 (CLI exit 8) | The store's LVNDR plan has no API access (it comes with Growth and above), or a multi-change undo needs a higher plan (`upgrade_required`). Tell the user. |
 | 400 `plan_required` | You sent a write without the preview's `planHash`. Preview, show it, then send the hash. |
 | 409 `plan_changed` (CLI exit 7), or a job `error` starting `plan_changed` | The changes to undo moved since the preview. Preview again and show the user the new plan. |
 | 404 (CLI exit 4) | Wrong id, or a change older than the plan's retention. Search again. |
-| 429 (CLI exit 5), or a tool result "Rate limited; retry in N s" | Wait for `Retry-After` (or N) seconds, then retry the same call with the same `Idempotency-Key`. Limits are per key per minute and follow the plan (reads/writes: Starter 60/10, Growth 120/20, Scale 300/60, development stores 120/20 once billing is on; during early access every store gets the top rate, 300/60). |
+| 429 (CLI exit 5), or a tool result "Rate limited; retry in N s" | Wait for `Retry-After` (or N) seconds, then retry the same call with the same `Idempotency-Key`. Limits are per key per minute and follow the plan (reads/writes: Growth 120/20, Pro and Agency 300/60, development stores 120/20 once billing is on; during early access every store gets the top rate, 300/60). |
 | Network error (CLI exit 6) | Retry once; writes are idempotent per `Idempotency-Key`. |
 | Undo or job `partial` or `failed` (CLI exit 2) | Read each result's `detail`; do not retry blindly. Re-preview: the record may have changed again (a `conflict`). |
 | Preview item `conflict` | The field was changed again after this change. Only overwrite with `includeConflicts` when the user agrees. |

@@ -14,8 +14,8 @@ Human docs: `/developers`. For language models: `/llms.txt`.
 | `Idempotency-Key: <uuid>` | On POST. Replayed for 24 h; the same key with another body is 409. |
 
 Responses carry `X-RateLimit-Limit` and `X-RateLimit-Remaining`; a 429 carries `Retry-After`.
-Limits are per key per minute and follow the store's plan (reads/writes): Starter 60/10, Growth
-120/20, Scale 300/60, development stores 120/20 once billing is on; during early access (billing
+Limits are per key per minute and follow the store's plan (reads/writes): Growth 120/20, Pro and
+Agency 300/60, development stores 120/20 once billing is on (Free and Starter have no API access); during early access (billing
 not on yet) every store gets the top rate, 300/60 (`LVNDR_RATE_READ` / `LVNDR_RATE_WRITE` override
 them on a self-hosted deployment). A request to a path that does not exist (404) spends no token.
 Failed bearer lookups are limited per IP (30 a minute, then 429). The API is included on every

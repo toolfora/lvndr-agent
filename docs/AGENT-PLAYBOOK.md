@@ -62,7 +62,7 @@ calling a run clean, poll `lvndr_get_run` / `GET /api/v1/runs/:id` about every 2
 LVNDR raises an anomaly alert when one actor changes at least the shop's threshold of records
 within its window (default 10 in 10 minutes; both are set in **Settings > Alerts**). Actors that
 look like agents, CLIs or automation trip it at half the threshold (minimum 3); **Settings > Treat
-these as agents** adds your own. Alerts need a plan that includes them (Growth, Scale and
+these as agents** adds your own. Alerts need a plan that includes them (Starter, Growth, Pro, Agency and
 development stores). They appear as a banner on the change log, by email when an alert address is
 set, and by webhook. An alert whose burst you undo as a batch, run or rollback is marked resolved.
 
