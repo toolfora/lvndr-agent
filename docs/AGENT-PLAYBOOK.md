@@ -7,7 +7,7 @@ hear about trouble and what to do when an agent goes wrong. The agent-side instr
 
 ## 1. Give each agent its own key
 
-Create keys in **LVNDR > Settings > Agents & API**. The key is shown once and stored only as a hash.
+Create keys in **LVNDR > Settings > Connections and API keys**. The key is shown once and stored only as a hash.
 One key per agent or pipeline: the key id is recorded on every undo, restore point and export it
 makes, and revoking one key does not stop the others.
 
@@ -61,12 +61,12 @@ calling a run clean, poll `lvndr_get_run` / `GET /api/v1/runs/:id` about every 2
 
 LVNDR raises an anomaly alert when one actor changes at least the shop's threshold of records
 within its window (default 10 in 10 minutes; both are set in **Settings > Alerts**). Actors that
-look like agents, CLIs or automation trip it at half the threshold (minimum 3); **Settings > Treat
+look like agents, CLIs or automation trip it at half the threshold (minimum 3); **Settings > Alerts > Treat
 these as agents** adds your own. Alerts need a plan that includes them (Starter, Growth, Pro, Agency and
 development stores). They appear as a banner on the change log, by email when an alert address is
 set, and by webhook. An alert whose burst you undo as a batch, run or rollback is marked resolved.
 
-**Alert webhook.** In **Settings > Alert webhook**, set an https URL and generate a signing
+**Alert webhook.** In **Settings > Alerts**, set an https URL and generate a signing
 secret. LVNDR POSTs each new or growing burst as JSON with `X-Lvndr-Event: alert.burst` and, once a
 secret exists, `X-Lvndr-Signature: sha256=<hex>`, an HMAC-SHA256 of the raw body with that secret:
 
@@ -98,7 +98,7 @@ chat, or call `lvndr batch <anchorChangeId>` to list the burst.
 
 ## 4. When an agent goes wrong
 
-1. **Stop the agent.** Revoke its key in **Settings > Agents & API** if it may keep going; revoke its Shopify access
+1. **Stop the agent.** Revoke its key in **Settings > Connections and API keys** if it may keep going; revoke its Shopify access
    too if it writes through its own token.
 2. **Find the damage.** `lvndr alerts`, then `lvndr run show <runId>` or
    `lvndr batch <anchorChangeId>`, or `lvndr changes --since 1h --actor <name>`. Check the

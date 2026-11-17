@@ -3,7 +3,7 @@
 /**
  * lvndr CLI: the Shopify store change log, undo and restore points from a terminal or an agent.
  * One file, no dependencies, Node 20+. Talks to the public REST API (`/api/v1`) with an API key
- * made in lvndr > Settings > Agents & API.
+ * made in LVNDR > Settings > Connections and API keys.
  *
  *   lvndr login                         # saves a profile to ~/.config/lvndr/config.json
  *   lvndr guard -- <command...>         # restore point + run around any command, then the undo line
@@ -360,7 +360,7 @@ function errorFromResponse(ctx, status, text, retryAfter) {
   let message = typeof e === "string" ? e : e?.message ?? `HTTP ${status}`;
   const code = typeof e === "object" && e ? e.code : undefined;
   const scope = /lacks the (\w+) scope/.exec(message)?.[1];
-  if (status === 403 && scope) message = `${message}. Create a key with the ${scope.charAt(0).toUpperCase()}${scope.slice(1)} scope in lvndr > Settings > Agents & API, then run \`lvndr login\` with it.`;
+  if (status === 403 && scope) message = `${message}. Create a key with the ${scope.charAt(0).toUpperCase()}${scope.slice(1)} scope in LVNDR > Settings > Connections and API keys, then run \`lvndr login\` with it.`;
   if (status === 401 && (code === "key_expired" || code === "key_revoked")) message = `${message} Then run \`lvndr login\` with the new key.`;
   const suffix = status === 429 && retryAfter ? ` (retry after ${retryAfter}s)` : "";
   return new CliError(`${message}${suffix}`, exitCodeForStatus(status), { status, code, retryAfter: retryAfter ?? undefined });
@@ -369,7 +369,7 @@ function errorFromResponse(ctx, status, text, retryAfter) {
 /** One API call. Returns parsed JSON (or text when raw). Retries 429 up to 3 times (<= 60 s). */
 export async function request(ctx, method, path, { body, query, raw = false, auth = true } = {}) {
   if (auth && !ctx.key) {
-    throw new CliError("No API key. Run `lvndr login`, set LVNDR_API_KEY, or pass --key (lvndr > Settings > Agents & API).", EXIT.AUTH);
+    throw new CliError("No API key. Run `lvndr login`, set LVNDR_API_KEY, or pass --key (LVNDR > Settings > Connections and API keys).", EXIT.AUTH);
   }
   const url = new URL(`${ctx.url}/api/v1${path}`);
   for (const [k, v] of Object.entries(query ?? {})) {
@@ -687,7 +687,6 @@ export const USAGE = Object.freeze({
   "theme diff": "theme diff <changeId> [--file <path>]...",
   "theme restore": "theme restore <changeId> [--file <path>]... [--include-conflicts] [--out <dir>]  |  theme restore <changeId> --run --plan-hash <h> [--file <path>]...  |  theme restore <changeId> --yes",
   "theme history": "theme history <themeId> [--file <path>] [--limit 20] [--cursor c]",
-  "run undo": "run undo [id] [--only <kind>]... [--exclude <changeId>]... [--reason text]  |  run undo [id] --run --plan-hash <h> [--only <kind>]...  |  run undo [id] --yes",
   guard: "guard [--agent name] [--task text] [--wait 300] -- <command...>",
   login: "login [--key lv_... | --with-token] [--url URL] [--profile name] [--no-verify]",
   propose: "propose <file.json | -> [--title text] [--note text]",
@@ -945,7 +944,7 @@ Exit codes: 0 ok, 1 usage/other, 2 undo partial or failed, 3 auth (401/403), 4 n
 5 rate limited, 6 network, 7 conflict (409, e.g. plan_changed: preview again), 8 the shop's
 plan lacks the API (402). Environment: LVNDR_API_KEY, LVNDR_API_URL, LVNDR_PROFILE,
 LVNDR_AGENT, LVNDR_RUN_ID, LVNDR_CONFIG, LVNDR_POLL_MS (job polling; default: the server's pollAfterMs),
-LVNDR_GUARD_POLL_MS (guard's run polling, default 20000), LVNDR_SHOPIFY_CLI (the Shopify CLI binary theme restore runs, default shopify). Keys: lvndr > Settings > Agents & API.`;
+LVNDR_GUARD_POLL_MS (guard's run polling, default 20000), LVNDR_SHOPIFY_CLI (the Shopify CLI binary theme restore runs, default shopify). Keys: LVNDR > Settings > Connections and API keys.`;
 
 function need(args, n, usage) {
   if (args.length < n || args.slice(0, n).some((a) => !a)) throw new CliError(`usage: lvndr ${usage}`);
@@ -1168,7 +1167,7 @@ async function login(parsed, io) {
   const stdin = io.stdin ?? process.stdin;
   let key = flags.key ?? (flags.withToken ? undefined : ctx.env.LVNDR_API_KEY);
   if (!key && flags.withToken) key = await readAll(stdin);
-  else if (!key) key = await readLine("lvndr API key (Settings > Agents & API; not shown as you type): ", io, { mask: true });
+  else if (!key) key = await readLine("lvndr API key (Settings > Connections and API keys; not shown as you type): ", io, { mask: true });
   if (!key) throw new CliError(flags.withToken ? "no key on stdin (lvndr login --with-token < file-with-key)" : "no key given");
   const url = ctx.url;
   let me = null;
@@ -1522,7 +1521,7 @@ async function dispatch(parsed, io) {
       const human = (r.types ?? []).map((t) => `${String(t.label ?? t.type).padEnd(22)} ${word[t.status] ?? t.status}${t.undo && t.status === "tracked" ? `  undo: ${t.undo}` : ""}${t.missingScopes?.length ? `  (${t.missingScopes.join(", ")})` : ""}`);
       if (r.translations) human.push(`${"Translations".padEnd(22)} ${word[r.translations.status] ?? r.translations.status}${r.translations.missingScopes?.length ? `  (${r.translations.missingScopes.join(", ")})` : ""}`);
       if (r.mediaOriginals) human.push(`${"Media originals".padEnd(22)} ${r.mediaOriginals.status}${r.mediaOriginals.files ? `  ${r.mediaOriginals.files} file${r.mediaOriginals.files === 1 ? "" : "s"} kept` : ""}`);
-      const notes = r.missingScopes?.length ? [`To grant: open LVNDR in the Shopify admin, Settings > Tracking coverage (${r.missingScopes.join(", ")}).`] : [];
+      const notes = r.missingScopes?.length ? [`To grant: open LVNDR in the Shopify admin, Settings > What LVNDR watches (${r.missingScopes.join(", ")}).`] : [];
       return { result: r, human, notes };
     }
     case "changes": {
@@ -1957,7 +1956,7 @@ async function dispatch(parsed, io) {
       const r = await request(ctx, "GET", "/stores");
       const list = r.stores ?? [];
       const human = table([["STORE", 44], ["HEALTH", 9], ["ALERTS", 7], ["ALLOWS", 0]], list.map((s) => [s.shop, s.health, String(s.openAlerts), ["read", s.grants?.undo ? "undo" : null, s.grants?.restore ? "restore" : null].filter(Boolean).join(", ")]));
-      if (!list.length) human.push("no connected stores; connect them in lvndr > Settings > Other stores");
+      if (!list.length) human.push("no connected stores; connect them in LVNDR > Settings > Other stores");
       return { result: r, human, list, quietIds: list.map((s) => s.shop), notes: list.length ? ["any command acts on one of these with --store <domain>"] : [] };
     }
     case "hub": {

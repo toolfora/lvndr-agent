@@ -29,15 +29,15 @@ MCP endpoint: `https://lvndr.toolfora.com/mcp` (Streamable HTTP).
 
 The first option for every client is keyless: give it only the URL, and it signs in through the
 Shopify admin with OAuth (you pick the store and approve the scopes). The second option is an API
-key: create one in **LVNDR > Settings > Agents & API** (starts with `lv_`, shown once), export
+key: create one in **LVNDR > Settings > Connections and API keys** (starts with `lv_`, shown once), export
 it, and send it as `Authorization: Bearer <key>`:
 
 ```sh
 export LVNDR_API_KEY=lv_...
 ```
 
-API access is included on every LVNDR plan and free on development stores. New keys can read
-and undo; rollback and export are opt-in per key.
+API access is free during early access; after that it comes with Growth and above, and it is
+always free on development stores. New keys can read and undo; rollback and export are opt-in per key.
 
 ## Claude Code
 

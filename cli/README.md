@@ -1,6 +1,6 @@
 # LVNDR CLI
 
-The command line for [lvndr](https://github.com/toolfora/lvndr-agent), the store time machine for
+The command line for [LVNDR](https://github.com/toolfora/lvndr-agent), the store time machine for
 Shopify: the change log, undo by change, batch or run, restore points and rollback, anomaly
 alerts and agent runs. One file, no dependencies, Node 20 or newer. It talks to the LVNDR REST API
 (`/api/v1`) with an API key.
@@ -17,13 +17,13 @@ From a checkout of [toolfora/lvndr-agent](https://github.com/toolfora/lvndr-agen
 
 ## Log in
 
-Create a key in the app: **LVNDR > Settings > Agents & API** (starts with `lv_`, shown once). A
+Create a key in the app: **LVNDR > Settings > Connections and API keys** (starts with `lv_`, shown once). A
 key has scopes: `read`, `undo`, `rollback`, `export`. New keys get `read` and `undo`; tick
 `rollback` (roll the store back to a restore point) and `export` (download the change log) when
-the key needs them. Marking a restore point and starting a run need only `read`. The API, MCP and this CLI come with the Growth, Pro and Agency plans and are free on development
-stores; requests per minute per key follow the plan (reads/writes: Growth 120/20, Pro and Agency
-300/60, development stores 120/20 once billing is on; during early access every store gets
-the top rate, 300/60).
+the key needs them. Marking a restore point and starting a run need only `read`. The API, MCP and this CLI are free during early access (every store gets the top rate,
+300/60); after that they come with Growth and above and stay free on development stores.
+Requests per minute per key follow the plan (reads/writes: Growth 120/20, Pro and Agency 300/60,
+development stores 120/20).
 
 ```sh
 lvndr login                                  # prompts for the key (not echoed), checks it with GET /me
@@ -225,6 +225,7 @@ interval.
 | 6 | Network: the app could not be reached |
 | 7 | Conflict (409): `plan_changed` (preview again) or an undo already running |
 | 8 | Plan required (402): the store's LVNDR plan does not include the API |
+| 127 | `guard` or `theme restore`: the command to run (or the Shopify CLI) is not installed; nothing was started |
 
 `guard` exits with the wrapped command's exit code.
 

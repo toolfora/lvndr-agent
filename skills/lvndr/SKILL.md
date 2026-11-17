@@ -2,7 +2,7 @@
 name: lvndr
 description: "Safety net for changing a Shopify store through LVNDR's change log. Use whenever you change a Shopify store with any tool (Admin API, Shopify CLI, store MCP, an app, a CSV import): mark a restore point or start a run first, verify afterwards what actually changed and who changed it, and undo precisely by change, batch, run or restore point with a preview before any write. Also use when asked what changed in a store, who changed a product, price, collection, page, menu or theme, or to roll a store back."
 license: MIT
-compatibility: "Needs the LVNDR Shopify app installed on the store, and either an MCP client that signs in with OAuth or an LVNDR API key (LVNDR_API_KEY); every LVNDR plan includes API access. Works through the LVNDR MCP server or the `lvndr` CLI (Node 20+); network access to the LVNDR app URL."
+compatibility: "Needs the LVNDR Shopify app installed on the store, and either an MCP client that signs in with OAuth or an LVNDR API key (LVNDR_API_KEY); API access is free during early access, then comes with Growth and above. Works through the LVNDR MCP server or the `lvndr` CLI (Node 20+); network access to the LVNDR app URL."
 metadata:
   author: HereNow Labs
   version: "0.3.0"
@@ -132,12 +132,12 @@ certain, and never read `unknown` as "nobody". LVNDR's own undos are always `exa
 
 | What you see | What to do |
 |---|---|
-| 401, 403 (CLI exit 3), or a tool result "This key lacks the ... scope" | Stop. Key missing, revoked or expired, a scope missing (read, undo, rollback, export), or 403 `not_installed` (the app is not installed on the store). Tell the user; a key with the scope is made in LVNDR Settings > Agents & API. |
+| 401, 403 (CLI exit 3), or a tool result "This key lacks the ... scope" | Stop. Key missing, revoked or expired, a scope missing (read, undo, rollback, export), or 403 `not_installed` (the app is not installed on the store). Tell the user; a key with the scope is made in LVNDR Settings > Connections and API keys. |
 | 402 (CLI exit 8) | The store's LVNDR plan has no API access (it comes with Growth and above), or a multi-change undo needs a higher plan (`upgrade_required`). Tell the user. |
 | 400 `plan_required` | You sent a write without the preview's `planHash`. Preview, show it, then send the hash. |
 | 409 `plan_changed` (CLI exit 7), or a job `error` starting `plan_changed` | The changes to undo moved since the preview. Preview again and show the user the new plan. |
 | 404 (CLI exit 4) | Wrong id, or a change older than the plan's retention. Search again. |
-| 429 (CLI exit 5), or a tool result "Rate limited; retry in N s" | Wait for `Retry-After` (or N) seconds, then retry the same call with the same `Idempotency-Key`. Limits are per key per minute and follow the plan (reads/writes: Growth 120/20, Pro and Agency 300/60, development stores 120/20 once billing is on; during early access every store gets the top rate, 300/60). |
+| 429 (CLI exit 5), or a tool result "Rate limited; retry in N s" | Wait for `Retry-After` (or N) seconds, then retry the same call with the same `Idempotency-Key`. Limits are per key per minute and follow the plan (reads/writes: Growth 120/20, Pro and Agency 300/60, development stores 120/20; Free and Starter have no API access. Free during early access, when every store gets the top rate, 300/60; after that the API comes with Growth and above). |
 | Network error (CLI exit 6) | Retry once; writes are idempotent per `Idempotency-Key`. |
 | Undo or job `partial` or `failed` (CLI exit 2) | Read each result's `detail`; do not retry blindly. Re-preview: the record may have changed again (a `conflict`). |
 | Preview item `conflict` | The field was changed again after this change. Only overwrite with `includeConflicts` when the user agrees. |

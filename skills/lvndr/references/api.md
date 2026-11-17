@@ -8,18 +8,18 @@ Human docs: `/developers`. For language models: `/llms.txt`.
 
 | Header | Meaning |
 |---|---|
-| `Authorization: Bearer lv_...` | API key from LVNDR > Settings > Agents & API. Scopes: `read`, `undo`, `rollback`, `export` (below). |
+| `Authorization: Bearer lv_...` | API key from LVNDR > Settings > Connections and API keys. Scopes: `read`, `undo`, `rollback`, `export` (below). |
 | `X-Lvndr-Agent: <name>` | Who is writing (agent, script, CLI). Shown in the change log and audit log. |
 | `X-Lvndr-Run-Id: <runId>` | Tag this write to an open run. Must name a run on the same shop. |
 | `Idempotency-Key: <uuid>` | On POST. Replayed for 24 h; the same key with another body is 409. |
 
 Responses carry `X-RateLimit-Limit` and `X-RateLimit-Remaining`; a 429 carries `Retry-After`.
 Limits are per key per minute and follow the store's plan (reads/writes): Growth 120/20, Pro and
-Agency 300/60, development stores 120/20 once billing is on (Free and Starter have no API access); during early access (billing
-not on yet) every store gets the top rate, 300/60 (`LVNDR_RATE_READ` / `LVNDR_RATE_WRITE` override
+Agency 300/60, development stores 120/20 (Free and Starter have no API access). Free during
+early access, when every store gets the top rate, 300/60; after that the API comes with Growth
+and above (`LVNDR_RATE_READ` / `LVNDR_RATE_WRITE` override
 them on a self-hosted deployment). A request to a path that does not exist (404) spends no token.
-Failed bearer lookups are limited per IP (30 a minute, then 429). The API is included on every
-plan; without an active plan every call is 402 `subscription_required`. Errors are
+Failed bearer lookups are limited per IP (30 a minute, then 429). Without an active plan every call is 402 `subscription_required`. Errors are
 `{"error": {"code", "message", "status"}}`. Unknown body fields are 400 `unknown_field` (so a typo
 such as `plan_hash` is never silently ignored); bodies over 64 KB are 413 `payload_too_large`.
 
