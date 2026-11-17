@@ -21,5 +21,5 @@ After the write:
    Run undo, batch undo and rollback return a background `job`: poll `lvndr_get_job` until it is done, partial or failed.
 
 Never undo or roll back without reading the preview, and never when the user only asked for a report.
-Theme files are tracked and restored with `lvndr theme restore <changeId>` through the merchant's own Shopify CLI (LVNDR cannot write them); orders and customers are out of scope.
+Theme files are tracked and shown as diffs, but LVNDR cannot write them or hand them out; to put one back, the merchant should open the file in Online Store > Themes > Edit code and use its Timeline (none for files in assets/ or for deleted files). Orders and customers are out of scope.
 Full workflow: the `lvndr` skill (`skills/lvndr/SKILL.md` in the lvndr-agent repository).

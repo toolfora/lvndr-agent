@@ -80,9 +80,8 @@ are opt-in when the key is made.
 | `GET /batches/:id/insights` | read | the same for a batch | `lvndr insights --batch <id>` |
 | `POST /plan-undo` | read | `{query}` -> `understood`, the preview, `planHash` and `next` (the write: `POST /runs/:id/undo` or `POST /selections/undo`) | `lvndr plan "<words>"` |
 | `POST /selections/undo` | undo | `{filters, dryRun, planHash, excludeChangeIds, fieldKinds, reason}`; dry run 200, real run 202 `{job}` | `lvndr undo-selection <filters>` |
-| `GET /changes/:id/theme-files` | read | `file` (repeatable), `live=1` (compare with the store now), `content=1` (earlier content of restorable files); returns `{shop, change, theme, files, restore}` with a unified diff per file and the restore plan (`planHash`, `commands`) | `lvndr theme diff <id>`, `lvndr theme restore <id>` |
+| `GET /changes/:id/theme-files` | read | `file` (repeatable); returns `{change, theme, files}`: a unified diff of each edited file, a line count and note for new and deleted ones | `lvndr theme diff <id>` |
 | `GET /themes/:theme/history` | read | `:theme` digits or `OnlineStoreTheme-123`; `file`, `limit`, `cursor`; returns `{theme, file, changes, nextCursor}` | `lvndr theme history <themeId> [--file f]` |
-| `GET /themes/:theme/file` | read | `file` (required), `changeId` + `side` (before, after) or `version`; returns `{content, exists, binary, note, ...}` | |
 | `GET /export` | export | `format=csv|json, since, until` | `lvndr export` |
 | `GET /openapi.json` | none | | `lvndr openapi` |
 

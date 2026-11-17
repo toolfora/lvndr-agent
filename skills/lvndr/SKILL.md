@@ -147,10 +147,10 @@ certain, and never read `unknown` as "nobody". LVNDR's own undos are always `exa
 ## Limits
 
 - Every theme file is tracked (Liquid, CSS, JS, JSON, locales), but LVNDR never writes theme
-  files: Shopify requires an exemption. Put them back with `lvndr theme restore <changeId>` in the
-  merchant's terminal (it previews, asks, then runs their own `shopify theme push --only ... --nodelete`);
-  `lvndr_theme_change_files` gives the diff and the exact command. Binary assets and files the
-  change added cannot be pushed back.
+  files and never hands out whole files: Shopify requires an exemption for writes, and apps may not
+  offer theme downloads. `lvndr_theme_change_files` shows what a change did (a diff of each edited
+  file, counts for new and deleted ones). To put a file back, the merchant should
+  open the file in Online Store > Themes > Edit code and use its Timeline (none for files in assets/ or for deleted files).
 - Orders, customers and other protected data are out of scope: not tracked, not undoable.
 - An undone delete is rebuilt from the last snapshot with a **new id**. A rebuilt product has
   its options, variants, metafields and manual-collection memberships, but no media, inventory

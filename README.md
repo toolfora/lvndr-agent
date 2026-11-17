@@ -8,7 +8,7 @@ rule, the MCP registry entry and the zero-dependency `lvndr` CLI.
 LVNDR records changes to the parts of a store it tracks (products, variants, inventory,
 collections, pages, blogs and posts, media, publication, metafields and definitions, menus,
 themes), says who made each one as far as Shopify reveals it, and puts it back with a preview
-first. Every theme file is tracked and put back through the merchant's own Shopify CLI (`lvndr theme restore`); orders and customers are not tracked. An agent starts a **run** with a restore point before it
+first. Every theme file is tracked and each edit shown as a diff, but LVNDR never writes or hands out theme files; orders and customers are not tracked. An agent starts a **run** with a restore point before it
 writes; afterwards it lists exactly what the run changed and undoes the whole run, one batch or one
 field. The LVNDR Shopify app must be installed on the store. This repository holds no app source.
 

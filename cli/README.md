@@ -124,8 +124,7 @@ prints one command's usage.
 | `lvndr scheduled [--all \| --status s]` | Scheduled undos |
 | `lvndr unschedule <id>` | Cancel a scheduled undo before it runs |
 | `lvndr theme history <themeId> [--file path] [--limit n] [--cursor c]` | A theme's changes (the id as Shopify CLI shows it), or one file's |
-| `lvndr theme diff <changeId> [--file path]...` | What a theme change did to each file, as unified diffs |
-| `lvndr theme restore <changeId> [--file path]... [--run --plan-hash h \| --yes] [--include-conflicts] [--out dir]` | Put theme files back through your own Shopify CLI (below) |
+| `lvndr theme diff <changeId> [--file path]...` | What a theme change did to each file: unified diffs of edited files, counts for new and deleted ones |
 | `lvndr help [command]`, `lvndr <command> --help`, `lvndr --version` | All commands, or one command's usage |
 
 Time flags accept `30m`, `24h`, `7d`, `2w` or an ISO timestamp. `--type` takes `PRODUCT`,
@@ -154,28 +153,17 @@ lvndr plan "undo the price changes Claude made yesterday, except on snowboards"
 
 `plan` writes nothing. Run the line it prints to write exactly that plan; the request is not read
 again, so "yesterday" cannot shift between the preview and the write.
-### Theme code: `lvndr theme restore`
+### Theme code: `lvndr theme diff`, `lvndr theme history`
 
-LVNDR tracks every file of the live and unpublished themes but cannot write theme files (Shopify
-allows that only to exempted apps). `theme restore` puts files back with the Shopify CLI you are
-logged in with: install it once (`npm install -g @shopify/cli`) and log in to the store.
-`LVNDR_SHOPIFY_CLI` names another binary.
+LVNDR tracks every file of the live and unpublished themes and shows what each change did: a
+unified diff of each edited file, a line count for new and deleted ones. It cannot put theme files
+back (Shopify allows theme writes only to exempted apps) and hands out no whole file. To restore a
+file, open the file in Online Store > Themes > Edit code and use its Timeline (none for files in assets/ or for deleted files).
 
 ```sh
-lvndr theme diff cm3abc                                   # what the change did to each file
-lvndr theme restore cm3abc                                # preview: each file and the diff a restore makes
-lvndr theme restore cm3abc --run --plan-hash q3Xl0c2V     # push exactly that plan
-lvndr theme restore cm3abc --file sections/header.liquid --out ./earlier   # write the file, push it yourself
+lvndr theme history 123456789 --file sections/header.liquid   # one file's changes
+lvndr theme diff cm3abc                                        # what the change did to each file
 ```
-
-The preview lists each file as `will restore`, `changed since` (only with `--include-conflicts`),
-`already back` or `can't restore` (the change added the file, it is binary, or LVNDR has no copy).
-`--run` previews again and pushes nothing (exit 7, `plan_changed`) if a file moved. The push writes
-only the chosen files to a temporary folder and runs
-`shopify theme push --store <shop> --theme <id> --only <file>... --nodelete` (plus `--allow-live`
-for the live theme), so nothing else in the theme changes and nothing is deleted; the folder is
-removed afterwards. Afterwards it reads the store again: exit 2 when the push fails or any pushed file is not back (Shopify CLI exits 0 on a partial upload), 127 when Shopify CLI is not installed. LVNDR's next
-theme check (within 10 minutes) records the restore as a change of its own.
 
 ### Global flags
 
@@ -225,7 +213,7 @@ interval.
 | 6 | Network: the app could not be reached |
 | 7 | Conflict (409): `plan_changed` (preview again) or an undo already running |
 | 8 | Plan required (402): the store's LVNDR plan does not include the API |
-| 127 | `guard` or `theme restore`: the command to run (or the Shopify CLI) is not installed; nothing was started |
+| 127 | `guard`: the command to run is not installed; nothing was started |
 
 `guard` exits with the wrapped command's exit code.
 
