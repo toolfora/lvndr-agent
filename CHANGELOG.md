@@ -1,12 +1,17 @@
 # Changelog
 
-## Unreleased (2026-11-17): theme files are view only
+## 0.4.0 (2026-11-17): theme files are view only
 
 - Removed `lvndr theme restore` and the MCP tool `lvndr_theme_file_at`; `lvndr_theme_change_files`
   and `GET /changes/:id/theme-files` no longer take `live` or `content` and return no `restore`
   plan. LVNDR no longer hands out whole theme files or pushes them (Shopify App Store requirement
   1.1.3: no theme downloads). A new or deleted file shows its line count, not its lines.
 - To put a theme file back: open it in Online Store > Themes > Edit code and use its Timeline.
+- Workspaces: `lvndr stores`, `lvndr hub`, `lvndr fleet start|end|show|runs|undo|mark|points|restore`, and
+  `--store <domain>` (or `LVNDR_STORE`) on any command to act on a connected store; the matching
+  MCP workspace tools and REST routes (`/stores`, `/hub/*`, `/fleet/*`).
+- Wording follows the app: LVNDR > Settings > Connections and API keys; plan names Free, Starter,
+  Growth, Pro and Agency.
 
 ## 0.3.0 (2026-11-15): review, time travel, agent QA, theme code, wider coverage
 
